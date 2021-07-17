@@ -1,0 +1,5 @@
+vendor/
+Configs/db.conf
+.idea/
+Templates/Cache
+~Templates/Cache/.htaccess
