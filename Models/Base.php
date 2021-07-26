@@ -6,8 +6,5 @@ namespace Models;
 
 abstract class Base
 {
-	public function __construct(array $inputs = [])
-	{
-		
-	}
+	public abstract function __construct(array $inputs = []);
 }

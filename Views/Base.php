@@ -24,7 +24,8 @@ abstract class Base
 		$templatesPathSubDir = ($this->templatesPathSubDir ? DIRECTORY_SEPARATOR . $this->templatesPathSubDir : '');
 		$this->templatesPath = Tool::getBasePath() . DIRECTORY_SEPARATOR . 'Templates';
 		$this->twig = new Environment(new FilesystemLoader($this->templatesPath . $templatesPathSubDir), [
-			'cache' => $this->templatesPath . DIRECTORY_SEPARATOR . 'Cache'
+			'cache' => $this->templatesPath . DIRECTORY_SEPARATOR . 'Cache',
+			'debug' => Tool::isEnvironmentDev() 
 		]);
 	}
 	

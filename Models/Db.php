@@ -39,7 +39,6 @@ class Db extends Base
 			return static::$config;
 		}
 		if (!file_exists(static::getDbConfigPath())) {
-			var_dump(static::getDbConfigPath());
 			trigger_error('Db config file NOT exists!', E_USER_ERROR);
 		}
 		return static::$config = new Config(['filename' => basename(static::getDbConfigPath())]);
@@ -53,8 +52,20 @@ class Db extends Base
 		return static::$configPath = Tool::getBasePath() . '/Configs/db.conf';
 	}
 	
-	public static function query()
+	public static function query($query)
 	{
-		static::connect();
+		if (!isset(static::$pdo)) {
+			static::connect();
+		}
+		$stmt = static::$pdo->query($query);
+		if($stmt) {
+			return $stmt->fetchAll(\PDO::FETCH_ASSOC);
+		}
+		return false;
+	}
+	
+	public function __construct(array $inputs = [])
+	{
+		
 	}
 }

@@ -1,0 +1,35 @@
+<h3>Informacje o produkcie</h3>
+<table>
+    <tr>
+        <td>ean</td>
+        <td>{{ product.ean }}</td>
+    </tr>
+    <tr>
+        <td>ilość</td>
+        <td>{{ product.qty }}</td>
+    </tr>
+    <tr>
+        <td>ostatnia cena</td>
+        <td>{{ product.lastCost }} zł</td>
+    </tr>
+    <tr>
+        <td>najniższa cena</td>
+        <td>{{ product.lowestCost }} zł</td>
+    </tr>
+</table>
+
+<h3>Produkty na stanie</h3>
+<table>
+    <tr>
+        <th>Koszt zakupu</th>
+        <th>Data dodania</th>
+        <th>Data ważności</th>
+    </tr>
+{% for p in product.activeProducts %}
+        <tr>
+            <td>{{ p.cost }}</td>
+            <td>{{ p.dateAdded }}</td>
+            <td>{{ p.expirationDate }}</td>
+        </tr>
+{% endfor %}
+</table>

@@ -43,6 +43,6 @@ abstract class Base
 		 * @var \Views\Base $viewObj
 		 */
 		$viewObj = new $viewClassName;
-		$viewObj->render(new Data());
+		$viewObj->render($data);
 	}
 }

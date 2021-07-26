@@ -13,6 +13,11 @@ class Data extends Base
 	
 	public function getArrayEquivalent(): array
 	{
-		return [];
+		return json_decode(json_encode(get_object_vars($this)), true);
+	}
+	
+	public function __construct(array $inputs = [])
+	{
+		
 	}
 }

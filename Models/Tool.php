@@ -25,4 +25,17 @@ class Tool extends Base
 		
 		trigger_error('Cannot get base path!?', E_USER_ERROR);
 	}
+	
+	public static function isEnvironmentDev(): bool 
+	{
+		if (strpos($_SERVER['SERVER_NAME'], '.local')) {
+			return true;
+		}
+		return false;
+	}
+	
+	public function __construct(array $inputs = [])
+	{
+		
+	}
 }

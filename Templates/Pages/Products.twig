@@ -1,0 +1,18 @@
+<table>
+    <tr>
+        <th>EAN</th>
+        <th>Producent</th>
+        <th>Nazwa</th>
+        <th>Liczba sztuk</th>
+        <th>&nbsp;</th>
+    </tr>
+    {% for product in products %}
+        <tr>
+            <td>{{ product.ean }}</td>
+            <td>{{ product.features.producer }}</td>
+            <td>{{ product.features.name }}</td>
+            <td>{{ product.qty }}</td>
+            <td><a href="?p=viewProduct&id={{ product.id }}">Zobacz</a></td>
+        </tr>
+    {% endfor %}
+</table>
