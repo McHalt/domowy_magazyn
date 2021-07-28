@@ -1,0 +1,12 @@
+<p>Dodajesz: {{ product.features.producer }} {{ product.features.name }} ({{ product.ean }})</p>
+<form action="">
+    <input type="hidden" name="p" value="addProduct">
+    <input type="hidden" name="ean" value="{{ product.ean }}">
+    <label for="qty">Liczba sztuk</label>
+    <input type="number" min="1" name="qty" id="qty" value="1">
+    <label for="expiration_date">Data ważności</label>
+    <input type="date" name="expiration_date" id="expiration_date">
+    <label for="cost">Koszt jednostkowy</label>
+    <input type="text" name="cost" id="cost">
+    <button>Dodaj</button>
+</form>

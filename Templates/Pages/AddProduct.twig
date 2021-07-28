@@ -1,0 +1,19 @@
+<p>Dodajesz nowy produkt o kodzie EAN {{ product.ean }}</p>
+<form action="">
+    <input type="hidden" name="p" value="addProduct">
+    <input type="hidden" name="ean" value="{{ product.ean }}"><br>
+    <label for="qty">Liczba sztuk</label>
+    <input type="number" min="1" name="qty" id="qty" value="1"><br>
+    <label for="expiration_date">Data ważności</label>
+    <input type="date" name="expiration_date" id="expiration_date"><br>
+    <label for="cost">Koszt jednostkowy</label>
+    <input type="text" name="cost" id="cost">
+    <fieldset>
+        <legend>Cechy produktu</legend>
+        {% for feature in product.allPossibleFeatures %}
+            <label for="feature_{{ loop.index }}">{{ feature }}</label>
+            <input type="text" name="feature_{{ loop.index }}" id="feature_{{ loop.index }}"><br>
+        {% endfor %}
+    </fieldset>
+    <button>Dodaj</button>
+</form>

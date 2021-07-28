@@ -64,6 +64,18 @@ class Db extends Base
 		return false;
 	}
 	
+	public static function exec($query) 
+	{
+		if (!isset(static::$pdo)) {
+			static::connect();
+		}
+		static::$pdo->exec($query);
+	}
+	
+	public static function getLastInsertId(){
+		return static::$pdo->lastInsertId();
+	}
+	
 	public function __construct(array $inputs = [])
 	{
 		
