@@ -1,0 +1,12 @@
+{% for error in errors %}
+    <p style="background-color: red; color: #eee">{{ error }}</p>
+{% endfor %}
+{% for warning in warnings %}
+    <p style="background-color: orange; color: #eee">{{ warning }}</p>
+{% endfor %}
+{% if errors is empty %}
+    <h3>Produkt z jakim terminem przydatności zużywasz?</h3>
+    {% for date in expirationDates %}
+        <a href="?p=removeProduct&ean={{ product.ean }}&date={{ date }}">{{ date }}</a><br><br>
+    {% endfor %}
+{% endif %}

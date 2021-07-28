@@ -32,27 +32,39 @@ class Product extends Base
 		}
 		$qry = "
 			SELECT
-				MIN(cost)/100 AS lowestCost,
 			  	COUNT(*) AS qty
 			FROM products_history
 			WHERE
 				products_id = $this->id
 				AND active = 1
 		";
-		$item = Db::query($qry)[0];
-		$this->qty = $item['qty'];
-		$this->lowestCost = $item['lowestCost'];
+		$item = Db::query($qry)[0] ?? null;
+		if ($item !== null) {
+			$this->qty = $item['qty'];
+		}
+		$qry = "
+			SELECT
+				MIN(cost)/100 AS lowestCost
+			FROM products_history
+			WHERE
+				products_id = $this->id
+		";
+		$item = Db::query($qry)[0] ?? null;
+		if ($item['lowestCost'] !== null) {
+			$this->lowestCost = $item['lowestCost'];
+		}
 		$qry = "
 			SELECT 
 				cost/100 AS lastCost
 			FROM products_history
 			WHERE
 				products_id = $this->id
-				AND active = 1
 			ORDER BY id DESC
 		";
-		$item = Db::query($qry)[0];
-		$this->lastCost = $item['lastCost'];
+		$item = Db::query($qry)[0] ?? null;
+		if ($item['lastCost'] !== null) {
+			$this->lastCost = $item['lastCost'];
+		}
 		foreach (Db::query("SELECT * FROM products_history WHERE products_id = $this->id AND active = 1") as $item) {
 			$this->activeProducts[] = [
 				'historyId' => $item['id'],
@@ -101,5 +113,19 @@ class Product extends Base
 			";
 			Db::exec($qry);
 		}
+	}
+	
+	public function setAsUnactive($date, $limit = 1) {
+		$ids = array_map('array_pop', Db::query("
+			SELECT id
+			FROM products_history
+			WHERE expiration_date = '$date'
+			LIMIT $limit
+		"));
+		Db::exec("
+			UPDATE products_history
+			SET active = 0
+			WHERE id IN (" . implode(",", $ids) . ")
+		");
 	}
 }
