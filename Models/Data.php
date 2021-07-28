@@ -6,6 +6,8 @@ namespace Models;
 
 class Data extends Base
 {
+	public array $warnings = [];
+	public array $errors = [];
 	public function __get($name): string
 	{
 		return '';
