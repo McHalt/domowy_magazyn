@@ -13,6 +13,14 @@ class Products extends Base
 	public function prepareData()
 	{
 		$this->list = new ProductsList();
-		$this->data->products = $this->list->objects;
+		$p = [];
+		foreach ($this->list->objects as $key => $obj) {
+			$p[$key] = $obj->qty;
+		}
+		arsort($p);
+		$this->data->products = [];
+		foreach ($p as $key => $qty) {
+			$this->data->products[] = $this->list->objects[$key];
+		}
 	}
 }

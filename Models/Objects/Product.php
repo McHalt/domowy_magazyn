@@ -39,7 +39,7 @@ class Product extends Base
 				AND active = 1
 		";
 		$item = Db::query($qry)[0] ?? null;
-		if ($item !== null) {
+		if (($item['qty'] ?? null) !== null) {
 			$this->qty = $item['qty'];
 		}
 		$qry = "
@@ -50,7 +50,7 @@ class Product extends Base
 				products_id = $this->id
 		";
 		$item = Db::query($qry)[0] ?? null;
-		if ($item['lowestCost'] !== null) {
+		if (($item['lowestCost'] ?? null) !== null) {
 			$this->lowestCost = $item['lowestCost'];
 		}
 		$qry = "
@@ -62,7 +62,7 @@ class Product extends Base
 			ORDER BY id DESC
 		";
 		$item = Db::query($qry)[0] ?? null;
-		if ($item['lastCost'] !== null) {
+		if (($item['lastCost'] ?? null) !== null) {
 			$this->lastCost = $item['lastCost'];
 		}
 		foreach (Db::query("SELECT * FROM products_history WHERE products_id = $this->id AND active = 1") as $item) {
@@ -83,7 +83,6 @@ class Product extends Base
 		$additionalData['cost'] = str_replace(",", ".", $additionalData['cost']);
 		if (
 			empty($additionalData['cost']) 
-			|| empty($additionalData['expiration_date']) 
 			|| !is_numeric($additionalData['cost'])
 			|| !is_numeric($additionalData['qty'])
 		) {
@@ -91,12 +90,13 @@ class Product extends Base
 		}
 		$additionalData['cost'] = (int)(((float)$additionalData['cost'])*100);
 		parent::save();
+		$expiration_date = $additionalData['expiration_date'] ? ("'" . $additionalData['expiration_date'] . "'") : 'NULL';
 		foreach(range(1, $additionalData['qty']) as $i) {
 			$qry = "
 				INSERT INTO products_history
 				(`products_id`, `cost`, `active`, `date_added`, `expiration_date`)
 				VALUES
-				('$this->id', '" . $additionalData['cost'] . "', 1, DATE(NOW()), '" . $additionalData['expiration_date'] . "')
+				('$this->id', '" . $additionalData['cost'] . "', 1, DATE(NOW()), $expiration_date)
 			";
 			Db::exec($qry);
 		}
@@ -116,10 +116,21 @@ class Product extends Base
 	}
 	
 	public function setAsUnactive($date, $limit = 1) {
+		$expirationDate = $date ? "= '$date'" : "IS NULL";
 		$ids = array_map('array_pop', Db::query("
 			SELECT id
 			FROM products_history
-			WHERE expiration_date = '$date'
+			WHERE products_id = $this->id
+		  	AND active = 1
+			AND expiration_date $expirationDate
+			LIMIT $limit
+		"));
+		var_dump(Db::query("
+			SELECT id
+			FROM products_history
+			WHERE products_id = $this->id
+		  	AND active = 1
+			AND expiration_date $expirationDate
 			LIMIT $limit
 		"));
 		Db::exec("

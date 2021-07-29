@@ -1,9 +1,19 @@
 {% for error in errors %}
-    <p style="background-color: red; color: #eee">{{ error }}</p>
+    <div class="row">
+        <p class="alert alert-danger">{{ error }}</p>
+    </div>
 {% endfor %}
 {% for warning in warnings %}
-    <p style="background-color: orange; color: #eee">{{ warning }}</p>
+    <div class="row">
+        <p class="alert alert-warning">{{ warning }}</p>
+    </div>
 {% endfor %}
-<a href="?p=products">Zobacz listę produktów</a>
-<a href="?p=addProduct">Dodaj produkt</a>
-<a href="?p=removeProduct">Zdejmij produkt</a>
+<div class="row option">
+    <a href="?p=products" class="col-sm-12">Zobacz listę produktów</a>
+</div>
+<div class="row option">
+    <a href="?p=addProduct" class="col-sm-12">Dodaj produkt</a>
+</div>
+<div class="row option">
+    <a href="?p=removeProduct" class="col-sm-12">Zdejmij produkt</a>
+</div>

@@ -40,8 +40,6 @@ class AddProduct extends Base
 				$features[str_replace('feature_', '', $key)] = $value;
 			}
 		}
-		$product = new Product();
-		$product->ean = $_GET['ean'];
 		$product->save([
 			'qty' => $_GET['qty'], 
 			'expiration_date' => $_GET['expiration_date'], 
