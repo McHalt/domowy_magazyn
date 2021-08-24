@@ -13,7 +13,8 @@ class Router extends Base
 	public function getCurrentPageName(): string
 	{
 		$page = ($_GET['p'] ?? '') ?: 'Main';
-		$page = ucfirst(strtolower($page));
+		$pieces = preg_split('/(?=[A-Z])/',$page);
+		$page = implode('', array_map('ucfirst', array_map('strtolower', $pieces)));
 		if (is_numeric($page)) {
 			$page = "Error$page";
 		}

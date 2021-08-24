@@ -32,7 +32,7 @@ abstract class Base
 	public function render(Data $data)
 	{
 		try {
-			echo $this->twig->render($this->templateName ?? basename(get_called_class()) . '.twig', $data->getArrayEquivalent());
+			echo $this->twig->render($this->templateName ?? Tool::getBasename(get_called_class()) . '.twig', $data->getArrayEquivalent());
 		} catch (LoaderError | SyntaxError | RuntimeError $e) {
 			trigger_error($e->getMessage(), E_USER_WARNING);
 		}
