@@ -8,6 +8,12 @@ use App\Pages\Main;
 use App\Pages\ViewProduct;
 use Models\Objects\Product;
 
+if (\Models\Tool::isEnvironmentDev()) {
+	ini_set('display_errors', 1);
+	ini_set('display_startup_errors', 1);
+	error_reporting(E_ALL);
+}
+
 class Router extends Base
 {
 	public function getCurrentPageName(): string

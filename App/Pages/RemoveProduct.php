@@ -35,8 +35,10 @@ class RemoveProduct extends Base
 			return;
 		}
 		$product->setAsUnactive($_GET['date']);
-		header('Location: /');
-		exit;
+		if (!defined('API_REQ') || API_REQ != 1) {
+			header('Location: /');
+			exit;
+		}
 	}
 	
 	public function loadPossibleExpirationsDates(Product $product)
@@ -48,8 +50,10 @@ class RemoveProduct extends Base
 		$possibleExpirationDates = array_unique($possibleExpirationDates);
 		if (count($possibleExpirationDates) == 1) {
 			$product->setAsUnactive($possibleExpirationDates[0]);
-			header('Location: /');
-			exit;
+			if (!defined('API_REQ') || API_REQ != 1) {
+				header('Location: /');
+				exit;
+			}
 		}
 		$this->data->expirationDates = $possibleExpirationDates;
 		$this->data->product = $product;

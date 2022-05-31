@@ -1,0 +1,3 @@
+<?php
+
+define('PWD', 'your_password');

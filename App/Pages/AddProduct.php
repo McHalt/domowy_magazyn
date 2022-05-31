@@ -18,21 +18,21 @@ class AddProduct extends Base
 	
 	public function prepareData()
 	{
-		if (empty($_GET['ean'])) {
+		$vars = array_map('htmlspecialchars', array_merge($_GET, $_POST)); //@todo docelowo do wyjebania $_GET, kto to widział wtf
+		if (empty($vars['ean'])) {
 			return;
 		}
-		$product = new Product(['loadVia' => 'ean', 'ean' => $_GET['ean']]);
-		if (!empty($product->id) && empty($_GET['qty'])) {
+		$product = new Product(['loadVia' => 'ean', 'ean' => $vars['ean']]);
+		if (!empty($product->id) && empty($vars['qty'])) {
 			$this->data->product = $product;
 			$this->setCustomView('EanExists');
 			return;
-		} else if (empty($product->id) && empty($_GET['qty'])) {
+		} else if (empty($product->id) && empty($vars['qty'])) {
 			$this->data->product = $product;
 			return;
 		}
-		$_GET = array_map('htmlspecialchars', $_GET);
 		$features = [];
-		foreach ($_GET as $key => $value) {
+		foreach ($vars as $key => $value) {
 			if (empty($value)) {
 				continue;
 			}
@@ -41,9 +41,9 @@ class AddProduct extends Base
 			}
 		}
 		$product->save([
-			'qty' => $_GET['qty'], 
-			'expiration_date' => $_GET['expiration_date'], 
-			'cost' => $_GET['cost'],
+			'qty' => $vars['qty'], 
+			'expiration_date' => $vars['expiration_date'], 
+			'cost' => $vars['cost'],
 			'features' => $features
 		]);
 		header('Location: /');

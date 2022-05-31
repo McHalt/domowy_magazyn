@@ -1,5 +1,7 @@
 vendor/
 Configs/db.conf
+Configs/send_notifs.conf
 .idea/
 Templates/Cache
 ~Templates/Cache/.htaccess
+api/pwd.php

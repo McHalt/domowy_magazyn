@@ -34,11 +34,20 @@ abstract class Base
 	public function render(Data $data)
 	{
 		$view = $this->customView ?? Tool::getBasename(get_called_class());
-		if (!$this->isViewExists($view)) {
-			trigger_error("View $view NOT exists for class " . Tool::getBasename(get_called_class()) . "!", E_USER_WARNING);
-			return;
+		if (defined('API_REQ') && constant('API_REQ') == 1) {
+			$view .= 'Api';
 		}
-		$viewClassName = '\\Views\\Pages\\' . Tool::getBasename(get_called_class()) . '\\' . $view;
+		if (!$this->isViewExists($view)) {
+			if (defined('API_REQ') && constant('API_REQ') == 1) {
+				$viewClassName = '\\Views\\Pages\\ApiBase';
+			} else {
+				trigger_error("View $view NOT exists for class " . Tool::getBasename(get_called_class()) . "!", E_USER_WARNING);
+				return;
+			}
+		}
+		if (empty($viewClassName)) {
+			$viewClassName = '\\Views\\Pages\\' . Tool::getBasename(get_called_class()) . '\\' . $view;
+		}
 		/**
 		 * @var \Views\Base $viewObj
 		 */
