@@ -34,6 +34,11 @@ class Tool extends Base
 		return false;
 	}
 	
+	public static function getBasename($path): string
+	{
+		return basename(str_replace('\\', '/', $path));
+	}
+	
 	public function __construct(array $inputs = [])
 	{
 		

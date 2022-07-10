@@ -5,6 +5,7 @@ namespace Views\Pages;
 
 
 use Models\Data;
+use Models\Tool;
 use Twig\Error\LoaderError;
 use Twig\Error\RuntimeError;
 use Twig\Error\SyntaxError;
@@ -23,10 +24,10 @@ abstract class Base extends \Views\Base
 	public function render(Data $data)
 	{
 		if (empty($this->templateName)) {
-			if (basename(get_called_class()) == basename(dirname(get_called_class()))) {
-				$this->templateName = basename(get_called_class()); 
+			if (Tool::getBasename(get_called_class()) == Tool::getBasename(dirname(str_replace('\\', '/', get_called_class())))) {
+				$this->templateName = Tool::getBasename(get_called_class()); 
 			} else {
-				$this->templateName = basename(dirname(get_called_class())) . '_' . basename(get_called_class());
+				$this->templateName = Tool::getBasename(dirname(str_replace('\\', '/', get_called_class()))) . '_' . Tool::getBasename(get_called_class());
 			}
 		}
 		try {

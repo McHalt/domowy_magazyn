@@ -11,8 +11,11 @@ class ViewProduct extends Base
 	public Product $product;
 	public function __construct()
 	{
-		$this->product = new Product(["id" => $_GET['id'] ?? null]);
-		if (!isset($this->product->id)) {
+		if (!empty($_GET['id'])) {
+			$this->product = new Product(["id" => $_GET['id'] ?? null]);
+		} elseif (!empty($_GET['ean'])) {
+			$this->product = new Product(['loadVia' => 'ean', 'ean' => $_GET['ean']]);
+		} else {
 			return;
 		}
 		

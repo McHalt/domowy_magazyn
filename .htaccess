@@ -1,0 +1,4 @@
+<Files "send_notifs_cron.php">
+Order Allow, Deny
+Deny from all
+</Files>

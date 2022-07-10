@@ -41,7 +41,7 @@ class Db extends Base
 		if (!file_exists(static::getDbConfigPath())) {
 			trigger_error('Db config file NOT exists!', E_USER_ERROR);
 		}
-		return static::$config = new Config(['filename' => basename(static::getDbConfigPath())]);
+		return static::$config = new Config(['filename' => Tool::getBasename(static::getDbConfigPath())]);
 	}
 	
 	private static function getDbConfigPath(): string

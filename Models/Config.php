@@ -29,7 +29,7 @@ class Config extends Base
 	private function setProperties()
 	{
 		foreach (explode(PHP_EOL, $this->getFileContent()) as $line) {
-			list($property, $value) = array_map('trim', explode(":", $line));
+			list($property, $value) = array_pad(array_map('trim', explode(":", $line)), 2, 0);
 			if (empty($property) || empty($value)) {
 				continue;
 			}

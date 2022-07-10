@@ -125,14 +125,6 @@ class Product extends Base
 			AND expiration_date $expirationDate
 			LIMIT $limit
 		"));
-		var_dump(Db::query("
-			SELECT id
-			FROM products_history
-			WHERE products_id = $this->id
-		  	AND active = 1
-			AND expiration_date $expirationDate
-			LIMIT $limit
-		"));
 		Db::exec("
 			UPDATE products_history
 			SET active = 0

@@ -5,6 +5,7 @@ namespace Models\Objects;
 
 
 use Models\Db;
+use Models\Tool;
 
 abstract class Base extends \Models\Base
 {
@@ -26,7 +27,7 @@ abstract class Base extends \Models\Base
 		$result = Db::query("SELECT * FROM $this->table WHERE $this->loadVia = '" . $inputs[$this->loadVia] . "'");
 		if (count($result) > 1) {
 			trigger_error(
-				"I don't know which object (" . basename(get_called_class()) . ") to load,
+				"I don't know which object (" . Tool::getBasename(get_called_class()) . ") to load,
 				 because it is more than 1 where  $this->loadVia = '" . $inputs[$this->loadVia] . "'"
 				, E_USER_WARNING
 			);
@@ -43,6 +44,9 @@ abstract class Base extends \Models\Base
 	public function save(array $additionalData = [])
 	{
 		$values = [];
+		if (empty($this->id)) {
+			$this->loadVia = 'id';
+		}
 		if (empty($this->{$this->loadVia})) {
 			$keys = array_diff($this->properties2Save, [$this->loadVia]);
 			foreach ($keys as $key) {
