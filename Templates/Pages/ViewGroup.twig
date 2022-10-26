@@ -1,3 +1,4 @@
+<h2 class="text-center">{{ group.name }}</h2>   
 <table class="products-list">
     <tr class="products-list__row">
         <th class="products-list__row__cell ean">EAN</th>
@@ -6,14 +7,13 @@
         <th class="products-list__row__cell">Liczba sztuk</th>
         <th class="products-list__row__cell">&nbsp;</th>
     </tr>
-    {% for product in products %}
+    {% for product in group.products.objects %}
         <tr class="products-list__row">
             <td class="products-list__row__cell ean">{{ product.ean }}</td>
             <td class="products-list__row__cell">{{ product.features.producer }}</td>
             <td class="products-list__row__cell">{{ product.features.name }}</td>
             <td class="products-list__row__cell">{{ product.qty }}</td>
             <td class="products-list__row__cell action"><a href="?p=viewProduct&id={{ product.id }}">Zobacz</a></td>
-            <td class="products-list__row__cell action"><a href="?p=editProduct&id={{ product.id }}">Edytuj</a></td>
         </tr>
     {% endfor %}
 </table>

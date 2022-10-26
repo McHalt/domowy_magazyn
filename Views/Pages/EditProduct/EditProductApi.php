@@ -1,10 +1,10 @@
 <?php
 
-namespace Views\Pages\AddProduct;
+namespace Views\Pages\EditProduct;
 
 use Models\Data;
 
-class AddProductApi extends \Views\Pages\ApiBase
+class EditProductApi extends \Views\Pages\ApiBase
 {
     public function render(Data $data)
     {

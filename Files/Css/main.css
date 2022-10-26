@@ -54,12 +54,12 @@ td:not(:last-child), th:not(:last-child) {
   border-right: 2px solid #424242;
 }
 
-.products-list__row__cell.action {
+.products-list__row__cell.action, .groups-list__row__cell.action {
   padding: 5px;
   background-color: #424242;
 }
 
-.products-list__row__cell.action a {
+.products-list__row__cell.action a, .groups-list__row__cell.action a {
   color: #fff;
   font-size: 17px;
 }
@@ -104,4 +104,25 @@ h3 {
   .products-list__row__cell.ean {
     display: none;
   }
+}
+
+#add_group {
+  border: none;
+  background-color: unset;
+  padding: 0;
+}
+
+#add_group img {
+  margin-top: -10px;
+  width: 36px;
+}
+
+.groups {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.groups__group {
+  display: flex;
+  justify-content: center;
 }

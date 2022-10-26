@@ -1,0 +1,15 @@
+<div class="row option">
+    <a href="?p=addGroup" class="col-sm-12">Dodaj nową grupę</a>
+</div>
+<table class="groups-list">
+    <tr class="groups-list__row">
+        <th class="groups-list__row__cell">Nazwa</th>
+        <th class="groups-list__row__cell">&nbsp;</th>
+    </tr>
+    {% for group in groups %}
+        <tr class="groups-list__row">
+            <td class="groups-list__row__cell">{{ group.name }}</td>
+            <td class="groups-list__row__cell action"><a href="?p=viewGroup&id={{ group.id }}">Zobacz</a></td>
+        </tr>
+    {% endfor %}
+</table>

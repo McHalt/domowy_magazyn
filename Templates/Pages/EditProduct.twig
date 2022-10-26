@@ -1,6 +1,6 @@
 <h3>Dodajesz nowy produkt o kodzie EAN {{ product.ean }}</h3>
 <form action="">
-    <input type="hidden" name="p" value="addProduct">
+    <input type="hidden" name="p" value="editProduct">
     <input type="hidden" name="ean" value="{{ product.ean }}"><br>
     <div class="row label-input-group">
         <label for="qty" class="col-sm-12 col-md-6">Liczba sztuk</label>
@@ -21,7 +21,11 @@
             <input type="text" name="feature_{{ loop.index }}" id="feature_{{ loop.index }}" class="col-sm-12 col-md-6" autocomplete="off"><br>
         </div>
     {% endfor %}
+    <h3>Grupy produktu<button id="add_group"><img src="/Files/Imgs/add_box.png" alt="Dodaj"></button></h3>
+    <div class="groups"></div>
     <div class="row">
         <button class="col-sm-12 col-md-6 next-step">Dodaj</button>
     </div>
 </form>
+<script>let groups = JSON.parse('{{ groupsJson|raw }}')</script>
+<script src="/Files/Js/edit_product.js"></script>

@@ -1,6 +1,6 @@
 <?php
 
-namespace Views\Pages\AddProduct;
+namespace Views\Pages\EditProduct;
 
 use Models\Data;
 

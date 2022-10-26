@@ -1,0 +1,41 @@
+<h3>Edytujesz: {{ product.features.producer }} {{ product.features.name }} ({{ product.ean }})</h3>
+<form action="">
+    <input type="hidden" name="p" value="editProduct">
+    <input type="hidden" name="ean" value="{{ product.ean }}">
+    <h3>Cechy produktu</h3>
+    {% for featureName, feature in product.allPossibleFeatures %}
+        <div class="row label-input-group">
+            <label for="feature_{{ loop.index }}" class="col-sm-12 col-md-6">{{ feature }}</label>
+            <input 
+                    type="text" 
+                    name="feature_{{ loop.index }}" 
+                    id="feature_{{ loop.index }}" 
+                    class="col-sm-12 col-md-6" 
+                    autocomplete="off"
+                    value="{{ attribute(product.features, featureName) }}"
+            ><br>
+        </div>
+    {% endfor %}
+    <h3>Grupy produktu<button id="add_group"><img src="/Files/Imgs/add_box.png" alt="Dodaj"></button></h3>
+    <div class="groups">
+        {% for groupId, groupName in product.productsGroups %}
+            <div class="groups__group">
+                <select name="groups[{{ loop.index }}]">
+                    <option value="0">Wybierz grupę</option>
+                    {% for key, name in product.allPossibleGroups %}
+                        <option value="{{ key }}"
+                        {% if groupId == key %}
+                            selected
+                        {% endif %}
+                        >{{ name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        {% endfor %}
+    </div>
+    <div class="row">
+        <button class="col-sm-12 col-md-6 next-step">Dodaj</button>
+    </div>
+</form>
+<script>let groups = JSON.parse('{{ groupsJson|raw }}')</script>
+<script src="/Files/Js/edit_product.js"></script>

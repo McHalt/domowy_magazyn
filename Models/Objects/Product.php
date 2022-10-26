@@ -6,6 +6,7 @@ namespace Models\Objects;
 
 use Models\Db;
 use Models\Lists\FeaturesList;
+use Models\Lists\ProductsGroupsList;
 
 class Product extends Base
 {
@@ -18,13 +19,19 @@ class Product extends Base
 	public array $activeProducts = [];
 	public FeaturesList $featuresList;
 	public array $features;
+	public ProductsGroupsList $productsGroupsList;
+	public array $productsGroups = [];
 	public array $properties2Save = ['id', 'ean'];
 	public array $allPossibleFeatures = [];
+	public array $allPossibleGroups = [];
 	
 	public function __construct(array $inputs = [])
 	{
 		foreach (Db::query("SELECT * FROM features") as $item) {
-			$this->allPossibleFeatures[$item['id']] = $item['name_pl'];
+			$this->allPossibleFeatures[$item['name']] = $item['name_pl'];
+		}
+		foreach (Db::query("SELECT * FROM products_groups") as $item) {
+			$this->allPossibleGroups[$item['id']] = $item['name'];
 		}
 		parent::__construct($inputs);
 		if ($this->stop == true) {
@@ -76,6 +83,13 @@ class Product extends Base
 		$qry = "INNER JOIN products_to_features ON products_id = $this->id AND features_id = id";
 		$this->featuresList = new FeaturesList(['additionalSql' => $qry]);
 		$this->features = $this->featuresList->toArray();
+		$qry = "pg
+				INNER JOIN products_to_products_groups ptpg
+    			ON 
+    				pg.id = ptpg.products_group_id 
+    				AND product_id = $this->id";
+		$this->productsGroupsList = new ProductsGroupsList(['additionalSql' => $qry]);
+		$this->productsGroups = $this->productsGroupsList->toArray();
 	}
 	
 	public function save(array $additionalData = [])
@@ -101,6 +115,10 @@ class Product extends Base
 			Db::exec($qry);
 		}
 		if (!empty($additionalData['features'])) {
+			Db::exec("
+				DELETE FROM
+			   	products_to_features
+				WHERE products_id = " . $this->id);
 			$values = [];
 			foreach ($additionalData['features'] as $id => $value) {
 				$values[] = "('$this->id', '$id', '$value')";

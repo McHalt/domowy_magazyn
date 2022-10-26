@@ -1,7 +1,7 @@
 <?php
 
 
-namespace Views\Pages\AddProduct;
+namespace Views\Pages\EditProduct;
 
 
 class EanExists extends \Views\Pages\Base
