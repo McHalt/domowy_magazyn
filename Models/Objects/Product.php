@@ -135,14 +135,17 @@ class Product extends Base
 	
 	public function setAsUnactive($date, $limit = 1) {
 		$expirationDate = $date ? "= '$date'" : "IS NULL";
-		$ids = array_map('array_pop', Db::query("
+		$ids = [];
+		foreach (Db::query("
 			SELECT id
 			FROM products_history
 			WHERE products_id = $this->id
 		  	AND active = 1
 			AND expiration_date $expirationDate
 			LIMIT $limit
-		"));
+		") as $id) {
+			$ids[] = array_pop($id);
+		}
 		Db::exec("
 			UPDATE products_history
 			SET active = 0
