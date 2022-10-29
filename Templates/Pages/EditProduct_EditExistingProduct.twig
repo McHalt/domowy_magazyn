@@ -2,6 +2,7 @@
 <form action="">
     <input type="hidden" name="p" value="editProduct">
     <input type="hidden" name="ean" value="{{ product.ean }}">
+    <input type="hidden" name="forceSave" value="1">
     <h3>Cechy produktu</h3>
     {% for featureName, feature in product.allPossibleFeatures %}
         <div class="row label-input-group">
@@ -34,7 +35,7 @@
         {% endfor %}
     </div>
     <div class="row">
-        <button class="col-sm-12 col-md-6 next-step">Dodaj</button>
+        <button class="col-sm-12 col-md-6 next-step">Zapisz</button>
     </div>
 </form>
 <script>let groups = JSON.parse('{{ groupsJson|raw }}')</script>

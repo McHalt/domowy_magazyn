@@ -16,15 +16,20 @@ class ViewProductApi extends \Views\Pages\ApiBase
 		 */
 		$p = $data->product;
 		$productData = [
+			'id' => $p->id,
 			'ean' => $p->ean,
 			'qty' => $p->qty,
 			'name' => $p->features['name'],
 			'producer' => $p->features['producer'],
 			'lastCost' => $p->lastCost,
 			'lowestCost' => $p->lowestCost,
-			'activeProducts' => $p->activeProducts,
-			'allPossibleFeatures' => $p->allPossibleFeatures
+			'activeProducts' => $p->activeProducts
 		];
+		
+		if (!empty($_GET['id'])) {
+			$productData['allPossibleFeatures'] = $p->allPossibleFeatures;
+			$productData['features'] = $p->features;
+		}
 		
 		echo json_encode($productData);
 	}

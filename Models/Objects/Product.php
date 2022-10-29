@@ -94,25 +94,30 @@ class Product extends Base
 	
 	public function save(array $additionalData = [])
 	{
-		$additionalData['cost'] = str_replace(",", ".", $additionalData['cost']);
+		$additionalData['cost'] = str_replace(",", ".", $additionalData['cost'] ?? '');
 		if (
-			empty($additionalData['cost']) 
-			|| !is_numeric($additionalData['cost'])
-			|| !is_numeric($additionalData['qty'])
+			(
+				empty($additionalData['cost']) 
+				|| !is_numeric($additionalData['cost'])
+				|| !is_numeric($additionalData['qty'])
+			)
+			&& empty($_GET['forceSave'])
 		) {
 			return;
 		}
 		$additionalData['cost'] = (int)(((float)$additionalData['cost'])*100);
 		parent::save();
-		$expiration_date = $additionalData['expiration_date'] ? ("'" . $additionalData['expiration_date'] . "'") : 'NULL';
-		foreach(range(1, $additionalData['qty']) as $i) {
-			$qry = "
-				INSERT INTO products_history
-				(`products_id`, `cost`, `active`, `date_added`, `expiration_date`)
-				VALUES
-				('$this->id', '" . $additionalData['cost'] . "', 1, DATE(NOW()), $expiration_date)
-			";
-			Db::exec($qry);
+		if (!empty($additionalData['qty'])) {
+			$expiration_date = $additionalData['expiration_date'] ? ("'" . $additionalData['expiration_date'] . "'") : 'NULL';
+			foreach (range(1, $additionalData['qty']) as $i) {
+				$qry = "
+					INSERT INTO products_history
+					(`products_id`, `cost`, `active`, `date_added`, `expiration_date`)
+					VALUES
+					('$this->id', '" . $additionalData['cost'] . "', 1, DATE(NOW()), $expiration_date)
+				";
+				Db::exec($qry);
+			}
 		}
 		if (!empty($additionalData['features'])) {
 			Db::exec("

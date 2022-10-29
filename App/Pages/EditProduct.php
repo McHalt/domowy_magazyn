@@ -41,7 +41,7 @@ class EditProduct extends Base
 			];
 		}
 		$this->data->groupsJson = json_encode($groups);
-		if (empty($vars['qty'])) {
+		if (empty($vars['qty']) && empty($vars['forceSave'])) {
 			if (!empty($product->id) && !empty($vars['ean'])) {
 				$this->data->product = $product;
 				$this->setCustomView('EanExists');
@@ -60,10 +60,18 @@ class EditProduct extends Base
 				$features[str_replace('feature_', '', $key)] = $value;
 			}
 		}
+		foreach (Db::query("
+			SELECT id, name
+			FROM features
+			WHERE name IN('" . implode("','", array_keys($features)) . "')
+		") as $row) {
+			$features[$row['id']] = $features[$row['name']];
+			unset($features['name']);
+		}
 		$product->save([
-			'qty' => $vars['qty'], 
-			'expiration_date' => $vars['expiration_date'], 
-			'cost' => $vars['cost'],
+			'qty' => $vars['qty'] ?? '', 
+			'expiration_date' => $vars['expiration_date'] ?? '', 
+			'cost' => $vars['cost'] ?? '',
 			'features' => $features
 		]);
 		if (!empty($postGroups)) {
