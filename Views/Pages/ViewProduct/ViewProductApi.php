@@ -22,7 +22,8 @@ class ViewProductApi extends \Views\Pages\ApiBase
 			'producer' => $p->features['producer'],
 			'lastCost' => $p->lastCost,
 			'lowestCost' => $p->lowestCost,
-			'activeProducts' => $p->activeProducts
+			'activeProducts' => $p->activeProducts,
+			'allPossibleFeatures' => $p->allPossibleFeatures
 		];
 		
 		echo json_encode($productData);
