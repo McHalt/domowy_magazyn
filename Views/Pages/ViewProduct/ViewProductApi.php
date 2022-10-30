@@ -15,6 +15,15 @@ class ViewProductApi extends \Views\Pages\ApiBase
 		 * @var Product $p
 		 */
 		$p = $data->product;
+		
+		$groups = [];
+		foreach ($p->productGroups as $id => $group) {
+			$groups[] = [
+				'id' => $id,
+				'name' => $group
+			];
+		}
+		
 		$productData = [
 			'id' => $p->id,
 			'ean' => $p->ean,
@@ -23,7 +32,8 @@ class ViewProductApi extends \Views\Pages\ApiBase
 			'producer' => $p->features['producer'],
 			'lastCost' => $p->lastCost,
 			'lowestCost' => $p->lowestCost,
-			'activeProducts' => $p->activeProducts
+			'activeProducts' => $p->activeProducts,
+			'groups' => $groups
 		];
 		
 		if (!empty($_GET['id'])) {

@@ -19,8 +19,8 @@ class Product extends Base
 	public array $activeProducts = [];
 	public FeaturesList $featuresList;
 	public array $features;
-	public ProductsGroupsList $productsGroupsList;
-	public array $productsGroups = [];
+	public ProductsGroupsList $productGroupsList;
+	public array $productGroups = [];
 	public array $properties2Save = ['id', 'ean'];
 	public array $allPossibleFeatures = [];
 	public array $allPossibleGroups = [];
@@ -88,8 +88,8 @@ class Product extends Base
     			ON 
     				pg.id = ptpg.products_group_id 
     				AND product_id = $this->id";
-		$this->productsGroupsList = new ProductsGroupsList(['additionalSql' => $qry]);
-		$this->productsGroups = $this->productsGroupsList->toArray();
+		$this->productGroupsList = new ProductsGroupsList(['additionalSql' => $qry]);
+		$this->productGroups = $this->productGroupsList->toArray();
 	}
 	
 	public function save(array $additionalData = [])

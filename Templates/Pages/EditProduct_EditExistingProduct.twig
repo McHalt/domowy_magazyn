@@ -19,7 +19,7 @@
     {% endfor %}
     <h3>Grupy produktu<button id="add_group"><img src="/Files/Imgs/add_box.png" alt="Dodaj"></button></h3>
     <div class="groups">
-        {% for groupId, groupName in product.productsGroups %}
+        {% for groupId, groupName in product.productGroups %}
             <div class="groups__group">
                 <select name="groups[{{ loop.index }}]">
                     <option value="0">Wybierz grupę</option>
