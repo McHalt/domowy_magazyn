@@ -66,7 +66,7 @@ class EditProduct extends Base
 			WHERE name IN('" . implode("','", array_keys($features)) . "')
 		") as $row) {
 			$features[$row['id']] = $features[$row['name']];
-			unset($features['name']);
+			unset($features[$row['name']]);
 		}
 		$product->save([
 			'qty' => $vars['qty'] ?? '', 
