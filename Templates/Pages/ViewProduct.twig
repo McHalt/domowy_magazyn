@@ -10,11 +10,23 @@
     </tr>
     <tr>
         <td>ostatnia cena</td>
-        <td>{{ product.lastCost }} zł</td>
+        <td>
+            {% if product.lastCost == 0 %}
+                B/D
+            {% else %}
+                {{ product.lastCost }} zł
+            {% endif %}
+        </td>
     </tr>
     <tr>
         <td>najniższa cena</td>
-        <td>{{ product.lowestCost }} zł</td>
+        <td>
+            {% if product.lowestCost == 0 %}
+                B/D
+            {% else %}
+                {{ product.lowestCost }} zł
+            {% endif %}
+        </td>
     </tr>
 </table>
 

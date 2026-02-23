@@ -55,10 +55,13 @@ class Product extends Base
 			FROM products_history
 			WHERE
 				products_id = $this->id
+				AND cost <> 0
 		";
 		$item = Db::query($qry)[0] ?? null;
 		if (($item['lowestCost'] ?? null) !== null) {
 			$this->lowestCost = $item['lowestCost'];
+		} else {
+			$this->lowestCost = 0;
 		}
 		$qry = "
 			SELECT 
@@ -66,11 +69,14 @@ class Product extends Base
 			FROM products_history
 			WHERE
 				products_id = $this->id
+				and cost <> 0
 			ORDER BY id DESC
 		";
 		$item = Db::query($qry)[0] ?? null;
 		if (($item['lastCost'] ?? null) !== null) {
 			$this->lastCost = $item['lastCost'];
+		} else {
+			$this->lastCost = 0;
 		}
 		foreach (Db::query("SELECT * FROM products_history WHERE products_id = $this->id AND active = 1") as $item) {
 			$this->activeProducts[] = [
@@ -97,8 +103,7 @@ class Product extends Base
 		$additionalData['cost'] = str_replace(",", ".", $additionalData['cost'] ?? '');
 		if (
 			(
-				empty($additionalData['cost']) 
-				|| !is_numeric($additionalData['cost'])
+				!is_numeric($additionalData['cost'])
 				|| !is_numeric($additionalData['qty'])
 			)
 			&& empty($_GET['forceSave'])

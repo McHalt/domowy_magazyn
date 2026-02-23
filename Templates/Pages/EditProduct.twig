@@ -15,10 +15,10 @@
         <input type="text" name="cost" id="cost" class="col-sm-12 col-md-6" autocomplete="off">
     </div>
     <h3>Cechy produktu</h3>
-    {% for feature in product.allPossibleFeatures %}
+    {% for featureName, feature in product.allPossibleFeatures %}
         <div class="row label-input-group">
-            <label for="feature_{{ loop.index }}" class="col-sm-12 col-md-6">{{ feature }}</label>
-            <input type="text" name="feature_{{ loop.index }}" id="feature_{{ loop.index }}" class="col-sm-12 col-md-6" autocomplete="off"><br>
+            <label for="feature_{{ featureName }}" class="col-sm-12 col-md-6">{{ feature }}</label>
+            <input type="text" name="feature_{{ featureName }}" id="feature_{{ featureName }}" class="col-sm-12 col-md-6" autocomplete="off"><br>
         </div>
     {% endfor %}
     <h3>Grupy produktu<button id="add_group"><img src="/Files/Imgs/add_box.png" alt="Dodaj"></button></h3>

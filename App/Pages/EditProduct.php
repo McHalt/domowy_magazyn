@@ -68,6 +68,11 @@ class EditProduct extends Base
 			$features[$row['id']] = $features[$row['name']];
 			unset($features[$row['name']]);
 		}
+		foreach (array_keys($features) as $key) {
+			if (!is_numeric($key)) {
+				unset($features[$key]);
+			}
+		}
 		$product->save([
 			'qty' => $vars['qty'] ?? '', 
 			'expiration_date' => $vars['expiration_date'] ?? '', 
@@ -89,6 +94,10 @@ class EditProduct extends Base
 				VALUES
 				" . implode(",", $groups);
 			Db::exec($qry);
+		}
+		if (defined('API_REQ') && constant('API_REQ') == 1) {
+			echo json_encode(['status' => 'ok', 'id' => $product->id]);
+			exit;
 		}
 		header('Location: /');
 		exit;
