@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="pl" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/files/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/files/css/main.css">
+    <title>{% block title %}Domowy Magazyn{% endblock %}</title>
+    <script>
+        (function () {
+            var saved = localStorage.getItem('bs-theme');
+            var auto = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            document.documentElement.setAttribute('data-bs-theme', saved || auto);
+        })();
+    </script>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg bg-body-tertiary border-bottom shadow-sm mb-4">
+    <div class="container">
+        <a class="navbar-brand fw-bold" href="{{ path('main') }}">🏠 Domowy Magazyn</a>
+        <div class="d-flex align-items-center gap-2">
+            <a class="nav-link" href="{{ path('products_list') }}">Produkty</a>
+            <a class="nav-link" href="{{ path('groups_list') }}">Grupy</a>
+            <button
+                class="btn btn-sm btn-outline-secondary ms-2"
+                onclick="toggleTheme()"
+                title="Przełącz tryb jasny/ciemny"
+            >
+                <span id="theme-icon">🌙</span>
+            </button>
+        </div>
+    </div>
+</nav>
+
+<main class="container pb-5">
+    {% block body %}{% endblock %}
+</main>
+
+<script>
+    (function () {
+        var current = document.documentElement.getAttribute('data-bs-theme');
+        var icon = document.getElementById('theme-icon');
+        if (icon) icon.textContent = current === 'dark' ? '☀️' : '🌙';
+    })();
+
+    function toggleTheme() {
+        var next = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-bs-theme', next);
+        localStorage.setItem('bs-theme', next);
+        var icon = document.getElementById('theme-icon');
+        if (icon) icon.textContent = next === 'dark' ? '☀️' : '🌙';
+    }
+</script>
+
+</body>
+</html>

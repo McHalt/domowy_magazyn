@@ -1,0 +1,77 @@
+{% extends 'base.html.twig' %}
+{% block title %}Nowy produkt – Domowy Magazyn{% endblock %}
+
+{% block body %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <strong>Nowy produkt</strong>
+                <span class="text-muted ms-2 small font-monospace">EAN: {{ product.ean }}</span>
+            </div>
+            <div class="card-body">
+                <form action="{{ path('product_edit') }}">
+                    <input type="hidden" name="ean" value="{{ product.ean }}">
+
+                    <h6 class="text-uppercase text-muted small mb-3">Ilość i cena</h6>
+                    <div class="row g-3 mb-4">
+                        <div class="col-sm-4">
+                            <label for="qty" class="form-label">Liczba sztuk</label>
+                            <input type="number" min="1" name="qty" id="qty" value="1" class="form-control">
+                        </div>
+                        <div class="col-sm-4">
+                            <label for="expiration_date" class="form-label">Data ważności</label>
+                            <input type="date" name="expiration_date" id="expiration_date" class="form-control">
+                        </div>
+                        <div class="col-sm-4">
+                            <label for="cost" class="form-label">Koszt jedn. (zł)</label>
+                            <input type="text" name="cost" id="cost" class="form-control" autocomplete="off" placeholder="0.00">
+                        </div>
+                    </div>
+
+                    <h6 class="text-uppercase text-muted small mb-3">Cechy produktu</h6>
+                    <div class="row g-3 mb-4">
+                        {% for featureName, featureLabel in allPossibleFeatures %}
+                            <div class="col-sm-6">
+                                <label for="feature_{{ featureName }}" class="form-label">{{ featureLabel }}</label>
+                                <input type="text" name="feature_{{ featureName }}" id="feature_{{ featureName }}"
+                                       class="form-control" autocomplete="off">
+                            </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-4">
+                        <button type="button" id="groups-toggle"
+                                class="btn btn-outline-secondary btn-sm w-100 d-flex justify-content-between align-items-center">
+                            <span>🗂️ Grupy produktu
+                                <span id="groups-count" class="badge bg-secondary ms-1">żadna</span>
+                            </span>
+                            <span id="groups-arrow">▾</span>
+                        </button>
+                        <div id="groups-panel" class="border rounded mt-1" style="display:none">
+                            <div class="p-2 border-bottom">
+                                <input type="search" id="groups-search" class="form-control form-control-sm"
+                                       placeholder="Szukaj grupy…">
+                            </div>
+                            <div style="max-height:200px; overflow-y:auto; padding:.5rem .75rem">
+                                {% for gId, gData in allGroups %}
+                                    <div class="form-check groups-item">
+                                        <input class="form-check-input group-checkbox" type="checkbox"
+                                               name="groups[]" value="{{ gId }}" id="group_{{ gId }}">
+                                        <label class="form-check-label" for="group_{{ gId }}">{{ gData.name }}</label>
+                                    </div>
+                                {% else %}
+                                    <p class="text-muted small mb-0">Brak zdefiniowanych grup</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-success w-100 py-2">➕ Dodaj produkt</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="/files/js/edit_product.js?v=2"></script>
+{% endblock %}

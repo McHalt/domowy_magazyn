@@ -1,0 +1,49 @@
+/* =============================================
+   Domowy Magazyn – custom styles (Bootstrap 5.3)
+   ============================================= */
+
+/* Duże pole do wpisania EAN */
+.ean-input {
+    font-size: 1.5rem;
+    height: 4rem;
+    text-align: center;
+}
+
+/* Kafelki menu głównego */
+.menu-card {
+    transition: transform .15s, box-shadow .15s;
+    cursor: pointer;
+    text-decoration: none;
+}
+.menu-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15) !important;
+}
+
+/* Przycisk dodaj grupę obok nagłówka */
+#add_group {
+    background: none;
+    border: none;
+    padding: 0 0 0 8px;
+    vertical-align: middle;
+    cursor: pointer;
+}
+#add_group img {
+    width: 26px;
+    opacity: 0.6;
+}
+#add_group:hover img {
+    opacity: 1;
+}
+
+/* Grid selectów z grupami */
+.groups {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .5rem;
+}
+
+/* Ukryj kolumnę EAN na małych ekranach */
+@media (max-width: 991px) {
+    .col-ean { display: none; }
+}

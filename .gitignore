@@ -1,7 +1,9 @@
-vendor/
-Configs/db.conf
-Configs/send_notifs.conf
-.idea/
-Templates/Cache
-~Templates/Cache/.htaccess
-api/pwd.php
+/.env.local
+/.env.*.local
+/config/secrets/prod/prod.decrypt.private.php
+/public/bundles/
+/var/
+/vendor/
+/docker/mysql/data/
+/etc/ansible/.secrets/extra.yml
+/.idea/

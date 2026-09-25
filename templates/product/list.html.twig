@@ -1,0 +1,43 @@
+{% extends 'base.html.twig' %}
+{% block title %}Lista produktów – Domowy Magazyn{% endblock %}
+
+{% block body %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">📦 Lista produktów</h4>
+    <a href="{{ path('product_edit') }}" class="btn btn-success btn-sm">➕ Dodaj produkt</a>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th class="col-ean">EAN</th>
+                <th>Producent</th>
+                <th>Nazwa</th>
+                <th class="text-center">Ilość</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for product in products %}
+            <tr>
+                <td class="col-ean text-muted small">{{ product.ean }}</td>
+                <td>{{ product.featuresMap.producer ?? '' }}</td>
+                <td>{{ product.featuresMap.name ?? '' }}</td>
+                <td class="text-center">
+                    <span class="badge {% if product.qty == 0 %}bg-secondary{% elseif product.qty <= 2 %}bg-warning text-dark{% else %}bg-success{% endif %} fs-6">
+                        {{ product.qty }}
+                    </span>
+                </td>
+                <td class="text-end">
+                    <a href="{{ path('product_view', {id: product.id}) }}" class="btn btn-sm btn-outline-primary me-1">Zobacz</a>
+                    <a href="{{ path('product_edit', {id: product.id}) }}" class="btn btn-sm btn-outline-secondary">Edytuj</a>
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-4">Brak produktów</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

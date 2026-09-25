@@ -1,0 +1,26 @@
+{% extends 'base.html.twig' %}
+{% block title %}Zdejmij produkt – Domowy Magazyn{% endblock %}
+
+{% block body %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h5 class="card-title text-center mb-4">➖ Zdejmij produkt ze stanu</h5>
+                <form action="{{ path('product_remove') }}">
+                    <div class="mb-3">
+                        <label for="ean" class="form-label fw-semibold">Kod EAN</label>
+                        <input type="text" name="ean" id="ean"
+                               class="form-control ean-input"
+                               placeholder="Wpisz lub zeskanuj kod EAN"
+                               autocomplete="off"
+                               autofocus>
+                        <div class="form-text">Cyfrowa reprezentacja kodu kreskowego produktu</div>
+                    </div>
+                    <button type="submit" class="btn btn-danger w-100 py-2">Dalej →</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

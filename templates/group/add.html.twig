@@ -1,0 +1,21 @@
+{% extends 'base.html.twig' %}
+{% block title %}Dodaj grupę – Domowy Magazyn{% endblock %}
+
+{% block body %}
+<div class="row justify-content-center mt-4">
+    <div class="col-md-5">
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h5 class="card-title mb-4">🗂️ Nowa grupa produktów</h5>
+                <form action="{{ path('group_add') }}" method="POST">
+                    <div class="mb-4">
+                        <label for="name" class="form-label">Nazwa grupy</label>
+                        <input type="text" class="form-control" id="name" name="name" autocomplete="off" autofocus placeholder="np. Nabiał, Słodycze...">
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">➕ Dodaj grupę</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

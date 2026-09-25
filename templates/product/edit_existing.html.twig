@@ -1,0 +1,68 @@
+{% extends 'base.html.twig' %}
+{% block title %}Edytuj – Domowy Magazyn{% endblock %}
+
+{% block body %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card shadow-sm">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span>
+                    <strong>{{ product.featuresMap.producer ?? '' }} {{ product.featuresMap.name ?? '' }}</strong>
+                    <span class="text-muted ms-2 small font-monospace">{{ product.ean }}</span>
+                </span>
+                <a href="{{ path('product_view', {id: product.id}) }}" class="btn btn-sm btn-outline-secondary">← Wróć</a>
+            </div>
+            <div class="card-body">
+                <form action="{{ path('product_edit') }}">
+                    <input type="hidden" name="id" value="{{ product.id }}">
+                    <input type="hidden" name="ean" value="{{ product.ean }}">
+                    <input type="hidden" name="forceSave" value="1">
+
+                    <h6 class="text-uppercase text-muted small mb-3">Cechy produktu</h6>
+                    <div class="row g-3 mb-4">
+                        {% for featureName, featureLabel in allPossibleFeatures %}
+                            <div class="col-sm-6">
+                                <label for="feature_{{ featureName }}" class="form-label">{{ featureLabel }}</label>
+                                <input type="text" name="feature_{{ featureName }}" id="feature_{{ featureName }}"
+                                       class="form-control" autocomplete="off"
+                                       value="{{ product.featuresMap[featureName] ?? '' }}">
+                            </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-4">
+                        <button type="button" id="groups-toggle"
+                                class="btn btn-outline-secondary btn-sm w-100 d-flex justify-content-between align-items-center">
+                            <span>🗂️ Grupy produktu
+                                <span id="groups-count" class="badge bg-secondary ms-1">żadna</span>
+                            </span>
+                            <span id="groups-arrow">▾</span>
+                        </button>
+                        <div id="groups-panel" class="border rounded mt-1" style="display:none">
+                            <div class="p-2 border-bottom">
+                                <input type="search" id="groups-search" class="form-control form-control-sm"
+                                       placeholder="Szukaj grupy…">
+                            </div>
+                            <div style="max-height:200px; overflow-y:auto; padding:.5rem .75rem">
+                                {% for gId, gData in allGroups %}
+                                    <div class="form-check groups-item">
+                                        <input class="form-check-input group-checkbox" type="checkbox"
+                                               name="groups[]" value="{{ gId }}" id="group_{{ gId }}"
+                                               {% if gId in product.groupsMap|keys %}checked{% endif %}>
+                                        <label class="form-check-label" for="group_{{ gId }}">{{ gData.name }}</label>
+                                    </div>
+                                {% else %}
+                                    <p class="text-muted small mb-0">Brak zdefiniowanych grup</p>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2">💾 Zapisz zmiany</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<script src="/files/js/edit_product.js?v=2"></script>
+{% endblock %}

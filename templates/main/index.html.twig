@@ -1,0 +1,40 @@
+{% extends 'base.html.twig' %}
+{% block title %}Strona główna – Domowy Magazyn{% endblock %}
+
+{% block body %}
+
+{% for error in errors %}
+    <div class="alert alert-danger">{{ error }}</div>
+{% endfor %}
+{% for warning in warnings %}
+    <div class="alert alert-warning">{{ warning }}</div>
+{% endfor %}
+
+<div class="row g-3 mt-2">
+    <div class="col-sm-6">
+        <a href="{{ path('products_list') }}" class="card card-body text-center menu-card text-decoration-none h-100 py-4">
+            <div class="fs-1">📦</div>
+            <div class="fw-semibold fs-5 mt-2">Lista produktów</div>
+        </a>
+    </div>
+    <div class="col-sm-6">
+        <a href="{{ path('product_edit') }}" class="card card-body text-center menu-card text-decoration-none h-100 py-4">
+            <div class="fs-1">➕</div>
+            <div class="fw-semibold fs-5 mt-2">Dodaj produkt</div>
+        </a>
+    </div>
+    <div class="col-sm-6">
+        <a href="{{ path('product_remove') }}" class="card card-body text-center menu-card text-decoration-none h-100 py-4">
+            <div class="fs-1">➖</div>
+            <div class="fw-semibold fs-5 mt-2">Zdejmij produkt</div>
+        </a>
+    </div>
+    <div class="col-sm-6">
+        <a href="{{ path('groups_list') }}" class="card card-body text-center menu-card text-decoration-none h-100 py-4">
+            <div class="fs-1">🗂️</div>
+            <div class="fw-semibold fs-5 mt-2">Grupy produktów</div>
+        </a>
+    </div>
+</div>
+
+{% endblock %}

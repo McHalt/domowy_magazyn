@@ -1,0 +1,34 @@
+{% extends 'base.html.twig' %}
+{% block title %}Dodaj – Domowy Magazyn{% endblock %}
+
+{% block body %}
+<div class="row justify-content-center">
+    <div class="col-md-7">
+        <div class="card shadow-sm">
+            <div class="card-header">
+                <strong>{{ product.featuresMap.producer ?? '' }} {{ product.featuresMap.name ?? '' }}</strong>
+                <span class="text-muted ms-2 small font-monospace">{{ product.ean }}</span>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-4">Ten produkt już istnieje. Uzupełnij poniższe dane, aby dodać kolejne sztuki.</p>
+                <form action="{{ path('product_edit') }}">
+                    <input type="hidden" name="ean" value="{{ product.ean }}">
+                    <div class="mb-3">
+                        <label for="qty" class="form-label">Liczba sztuk</label>
+                        <input type="number" min="1" name="qty" id="qty" value="1" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label for="expiration_date" class="form-label">Data ważności</label>
+                        <input type="date" name="expiration_date" id="expiration_date" class="form-control">
+                    </div>
+                    <div class="mb-4">
+                        <label for="cost" class="form-label">Koszt jednostkowy (zł)</label>
+                        <input type="text" name="cost" id="cost" class="form-control" autocomplete="off" placeholder="0.00">
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">➕ Dodaj</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

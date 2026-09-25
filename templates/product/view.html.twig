@@ -1,0 +1,85 @@
+{% extends 'base.html.twig' %}
+{% block title %}{{ product.featuresMap.name ?? product.ean }} – Domowy Magazyn{% endblock %}
+
+{% block body %}
+<div class="d-flex align-items-center gap-2 mb-4">
+    <a href="{{ path('products_list') }}" class="btn btn-sm btn-outline-secondary">← Wróć</a>
+    <h4 class="mb-0">
+        {{ product.featuresMap.producer ?? '' }}
+        {{ product.featuresMap.name ?? '' }}
+        <small class="text-muted fs-6">{{ product.ean }}</small>
+    </h4>
+</div>
+
+<div class="row g-3">
+    <div class="col-md-5">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Informacje ogólne</div>
+            <div class="card-body p-0">
+                <table class="table table-borderless mb-0">
+                    <tr>
+                        <th class="ps-3">EAN</th>
+                        <td class="font-monospace">{{ product.ean }}</td>
+                    </tr>
+                    <tr>
+                        <th class="ps-3">Na stanie</th>
+                        <td>
+                            <span class="badge {% if product.qty == 0 %}bg-secondary{% elseif product.qty <= 2 %}bg-warning text-dark{% else %}bg-success{% endif %} fs-6">
+                                {{ product.qty }} szt.
+                            </span>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th class="ps-3">Ostatnia cena</th>
+                        <td>{% if product.lastCost == 0 %}B/D{% else %}{{ product.lastCost }} zł{% endif %}</td>
+                    </tr>
+                    <tr>
+                        <th class="ps-3">Najniższa cena</th>
+                        <td>{% if product.lowestCost == 0 %}B/D{% else %}{{ product.lowestCost }} zł{% endif %}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-7">
+        <div class="card h-100">
+            <div class="card-header fw-semibold">Produkty na stanie</div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-center">Koszt</th>
+                                <th class="text-center">Data dodania</th>
+                                <th class="text-center">Data ważności</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        {% for p in product.activeProducts %}
+                            <tr>
+                                <td class="text-center">{{ p.cost }} zł</td>
+                                <td class="text-center">{{ p.dateAdded }}</td>
+                                <td class="text-center">
+                                    {% if p.expirationDate %}
+                                        {{ p.expirationDate }}
+                                    {% else %}
+                                        <span class="text-muted">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% else %}
+                            <tr><td colspan="3" class="text-center text-muted py-3">Brak sztuk na stanie</td></tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3">
+    <a href="{{ path('product_edit', {id: product.id}) }}" class="btn btn-outline-primary btn-sm">✏️ Edytuj produkt</a>
+</div>
+{% endblock %}
