@@ -1,0 +1,18 @@
+---
+# Cofnięcie do poprzedniego wydania:
+#   ansible-playbook rollback.yaml
+#
+# Przestawia `current` na poprzedni katalog w releases/. Bazy nie dotyka.
+- name: Rollback domowego magazynu
+  hosts: prod
+  gather_facts: false
+  vars_files:
+    - vars/vars.yaml
+    - .secrets/extra.yml
+
+  vars:
+    ansistrano_deploy_to: "{{ deploy_to }}"
+    ansistrano_after_symlink_tasks_file: "{{ playbook_dir }}/deploy/after-symlink.yaml"
+
+  roles:
+    - ansistrano.rollback

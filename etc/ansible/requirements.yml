@@ -1,0 +1,4 @@
+---
+roles:
+  - src: ansistrano.deploy
+  - src: ansistrano.rollback

@@ -1,0 +1,37 @@
+---
+app_name: domowymagazyn
+domain: domowymagazyn.kchroscinski.pl
+domain_aliases:
+  - www.domowymagazyn.kchroscinski.pl
+
+# Obok releases/ i current leży html/ — stara aplikacja sprzed migracji do Symfony,
+# zostawiona jako awaryjny powrót (patrz README).
+deploy_to: "/var/www/mchalt/domains/{{ domain }}"
+repo_root: "{{ playbook_dir }}/../.."
+
+php_version: "8.3"
+ondrej_ppa_key_fingerprint: B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6
+php_bin: "/usr/bin/php{{ php_version }}"
+composer_phar: "{{ deploy_to }}/tools/composer.phar"
+
+fpm_service: "php{{ php_version }}-fpm"
+fpm_pool_file: "/etc/php/{{ php_version }}/fpm/pool.d/{{ app_name }}.conf"
+fpm_socket: "/run/php/php{{ php_version }}-fpm-{{ app_name }}.sock"
+
+# Czytany przez Apache już po przełączeniu na użytkownika z AssignUserId
+# (mpm_itk), więc musi należeć do konta deployu, nie do roota.
+htpasswd_file: "{{ deploy_to }}/shared/.htpasswd"
+
+apache_vhost_file: "/etc/apache2/sites-available/{{ domain }}.conf"
+letsencrypt_cert_dir: "/etc/letsencrypt/live/{{ domain }}"
+# Puste = certbot użyje istniejącego konta ACME na serwerze (jest już certyfikat
+# slubkrzysiainatalki.pl). Uzupełnij, jeśli certbot poprosi o rejestrację.
+letsencrypt_email: ""
+
+db_host: "127.0.0.1"
+db_port: 3306
+db_name: domowy_magazyn
+db_user: domowymagazyn
+db_server_version: "8.0.46"
+
+ansistrano_keep_releases: 3

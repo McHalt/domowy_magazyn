@@ -1,0 +1,84 @@
+---
+# Wdrożenie kodu:
+#   ansible-playbook deploy.yaml
+#
+# Bez hasła sudo — wszystko na koncie SSH; jedyny wyjątek to przeładowanie
+# PHP-FPM, dopuszczone w sudoers przez provision.yaml.
+#
+# Ansistrano w trybie rsync pcha working tree z laptopa (nie commit) do nowego
+# katalogu w releases/. `current` przeskakuje dopiero, gdy composer, cache i
+# połączenie z bazą w nowym wydaniu przeszły — nieudany deploy nie psuje
+# działającej strony.
+#
+# Migracje Doctrine celowo nie są uruchamiane: baza produkcyjna pochodzi ze
+# starej aplikacji, a pierwsza migracja robi CREATE TABLE (patrz README).
+- name: Deploy domowego magazynu
+  hosts: prod
+  gather_facts: true
+  vars_files:
+    - vars/vars.yaml
+    - .secrets/extra.yml
+
+  vars:
+    ansistrano_deploy_from: "{{ repo_root }}/"
+    ansistrano_deploy_to: "{{ deploy_to }}"
+    ansistrano_deploy_via: rsync
+    ansistrano_allow_anonymous_stats: false
+
+    ansistrano_shared_paths:
+      - var/log
+    ansistrano_shared_files:
+      - .env.local
+
+    ansistrano_rsync_extra_params:
+      - "--exclude=.git"
+      - "--exclude=.idea"
+      - "--exclude=/vendor"
+      - "--exclude=/var"
+      - "--exclude=/old"
+      - "--exclude=/docker"
+      - "--exclude=/docker-compose.yml"
+      - "--exclude=/etc"
+      - "--exclude=/public/bundles"
+      - "--exclude=/.env.local"
+      - "--exclude=/.env.*.local"
+      - "--exclude=/.env.local.php"
+      - "--exclude=*.bak"
+      - "--exclude=*.bak-*"
+      - "--exclude=*.orig"
+
+    ansistrano_after_setup_tasks_file: "{{ playbook_dir }}/deploy/after-setup.yaml"
+    ansistrano_after_update_code_tasks_file: "{{ playbook_dir }}/deploy/after-update-code.yaml"
+    ansistrano_after_symlink_shared_tasks_file: "{{ playbook_dir }}/deploy/after-symlink-shared.yaml"
+    ansistrano_after_symlink_tasks_file: "{{ playbook_dir }}/deploy/after-symlink.yaml"
+
+  pre_tasks:
+    - name: Sprawdź, czy composer.lock istnieje
+      ansible.builtin.stat:
+        path: "{{ repo_root }}/composer.lock"
+      register: local_composer_lock
+      delegate_to: localhost
+
+    - name: Przerwij bez composer.lock
+      ansible.builtin.fail:
+        msg: >-
+          Brak composer.lock — bez niego każdy deploy instalowałby inne wersje
+          paczek niż te sprawdzone lokalnie.
+      when: not local_composer_lock.stat.exists
+
+    - name: Sprawdź sekrety
+      ansible.builtin.assert:
+        that:
+          - item.value | string | length > 0
+          - item.value | string != 'zmien-mnie'
+          - "\"'\" not in item.value | string"
+        fail_msg: >-
+          {{ item.key }} w .secrets/extra.yml jest pusty, ma wartość z przykładu
+          albo zawiera apostrof (nie da się go zapisać w .env.local).
+        quiet: true
+      loop: "{{ {'db_password': db_password, 'app_secret': app_secret, 'api_password': api_password, 'onesignal_app_id': onesignal_app_id, 'onesignal_rest_api_key': onesignal_rest_api_key} | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+  roles:
+    - ansistrano.deploy

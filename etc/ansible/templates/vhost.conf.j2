@@ -1,0 +1,67 @@
+# {{ ansible_managed }}
+{% macro app_config() %}
+        ServerName {{ domain }}
+{% for alias in domain_aliases %}
+        ServerAlias {{ alias }}
+{% endfor %}
+        DocumentRoot {{ deploy_to }}/current/public
+
+        <Directory {{ deploy_to }}/current/public>
+                Options -Indexes +FollowSymLinks
+                AllowOverride None
+                Require all granted
+                FallbackResource /index.php
+                # mod_php 8.1 jest włączony globalnie dla pozostałych stron;
+                # tutaj PHP ma iść wyłącznie przez pulę FPM 8.3.
+                <IfModule mod_php.c>
+                        php_admin_flag engine off
+                </IfModule>
+        </Directory>
+
+        <Location />
+                AuthType Basic
+                AuthName "{{ app_name }}"
+                AuthUserFile {{ htpasswd_file }}
+                Require valid-user
+        </Location>
+        # Klienci API mają własne hasło (?pwd=) i nie obsługują Basic Auth.
+        <Location /api/>
+                Require all granted
+        </Location>
+        <Location /.well-known/acme-challenge/>
+                Require all granted
+        </Location>
+
+        <FilesMatch "\.php$">
+                SetHandler "proxy:unix:{{ fpm_socket }}|fcgi://localhost"
+        </FilesMatch>
+
+        <IfModule mpm_itk_module>
+                AssignUserId {{ ansible_user }} {{ ansible_user }}
+        </IfModule>
+
+        ErrorLog ${APACHE_LOG_DIR}/{{ domain }}-error.log
+        CustomLog ${APACHE_LOG_DIR}/{{ domain }}-access.log combined
+{% endmacro %}
+<VirtualHost *:80>
+{{ app_config() }}
+{% if https_enabled | bool %}
+        # /api/ bez przekierowania: klienci API wołają stare adresy http://,
+        # a przekierowanie zamieniłoby ich POST-y w GET-y.
+        RewriteEngine on
+        RewriteCond %{REQUEST_URI} !^/api/
+        RewriteCond %{REQUEST_URI} !^/\.well-known/acme-challenge/
+        RewriteRule ^ https://%{SERVER_NAME}%{REQUEST_URI} [END,NE,R=permanent]
+{% endif %}
+</VirtualHost>
+{% if https_enabled | bool %}
+
+<IfModule mod_ssl.c>
+<VirtualHost *:443>
+{{ app_config() }}
+        Include /etc/letsencrypt/options-ssl-apache.conf
+        SSLCertificateFile {{ letsencrypt_cert_dir }}/fullchain.pem
+        SSLCertificateKeyFile {{ letsencrypt_cert_dir }}/privkey.pem
+</VirtualHost>
+</IfModule>
+{% endif %}

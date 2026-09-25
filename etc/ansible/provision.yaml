@@ -1,0 +1,134 @@
+---
+# Jednorazowe przygotowanie serwera:
+#   ansible-playbook provision.yaml --ask-become-pass
+#
+# Na tym samym Apache stoją inne strony na mod_php 8.1 — playbook ich nie rusza.
+# PHP 8.3 działa wyłącznie jako osobna pula FPM tej aplikacji.
+- name: Provision serwera domowego magazynu
+  hosts: prod
+  gather_facts: true
+  vars_files:
+    - vars/vars.yaml
+
+  tasks:
+    # PPA zmieniło klucz podpisu; ze starym (2009) apt update po cichu pomija
+    # to repo i instalacja kończy się 404 na nieaktualnych wersjach pakietów.
+    - name: Pobierz aktualny klucz PPA ondrej/php
+      become: true
+      ansible.builtin.get_url:
+        url: "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x{{ ondrej_ppa_key_fingerprint }}"
+        dest: /etc/apt/trusted.gpg.d/ondrej-php-current.asc
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Sprawdź odcisk klucza PPA
+      ansible.builtin.command:
+        cmd: gpg --show-keys --with-colons /etc/apt/trusted.gpg.d/ondrej-php-current.asc
+      register: ondrej_key_info
+      changed_when: false
+      failed_when: "'fpr:::::::::' ~ ondrej_ppa_key_fingerprint ~ ':' not in ondrej_key_info.stdout"
+
+    # PPA zmieniło też Label; apt odmawia aktualizacji bez jawnej zgody.
+    # Dopuszczona wyłącznie zmiana Label, nie Origin/Suite.
+    - name: Odśwież listę pakietów
+      become: true
+      ansible.builtin.command:
+        cmd: apt-get update -o Acquire::AllowReleaseInfoChange::Label=true
+      changed_when: false
+
+    - name: Zainstaluj PHP {{ php_version }} FPM i rozszerzenia
+      become: true
+      ansible.builtin.apt:
+        name:
+          - "php{{ php_version }}-fpm"
+          - "php{{ php_version }}-cli"
+          - "php{{ php_version }}-mysql"
+          - "php{{ php_version }}-intl"
+          - "php{{ php_version }}-mbstring"
+          - "php{{ php_version }}-xml"
+          - "php{{ php_version }}-curl"
+          - "php{{ php_version }}-zip"
+        state: present
+
+    # Pakiet php8.3-cli przestawia alternatywę /usr/bin/php na 8.3, a z niej
+    # korzystają pozostałe projekty na serwerze (np. composer z apt).
+    - name: Pozostaw /usr/bin/php na PHP 8.1
+      become: true
+      community.general.alternatives:
+        name: php
+        path: /usr/bin/php8.1
+
+    - name: Utwórz katalogi deployu
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop:
+        - "{{ deploy_to }}/releases"
+        - "{{ deploy_to }}/shared"
+        - "{{ deploy_to }}/shared/var/log"
+        - "{{ deploy_to }}/tools"
+
+    # Composer z apt (2.2.6 z 2022) jest za stary na PHP 8.3.
+    - name: Pobierz aktualnego Composera
+      ansible.builtin.get_url:
+        url: https://getcomposer.org/download/latest-2.x/composer.phar
+        checksum: "sha256:https://getcomposer.org/download/latest-2.x/composer.phar.sha256"
+        dest: "{{ composer_phar }}"
+        mode: "0755"
+
+    - name: Wgraj pulę FPM aplikacji
+      become: true
+      ansible.builtin.template:
+        src: templates/fpm-pool.conf.j2
+        dest: "{{ fpm_pool_file }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Przeładuj PHP-FPM
+
+    - name: Włącz i uruchom PHP-FPM
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ fpm_service }}"
+        enabled: true
+        state: started
+
+    - name: Włącz moduły Apache potrzebne do FPM
+      become: true
+      community.general.apache2_module:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - proxy
+        - proxy_fcgi
+        - setenvif
+        - rewrite
+      notify: Przeładuj Apache
+
+    # Deploy przełącza `current` na nowe wydanie i musi przeładować FPM (opcache
+    # i realpath cache trzymają ścieżki starego wydania), a działa bez hasła sudo.
+    - name: Pozwól na przeładowanie PHP-FPM bez hasła
+      become: true
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ app_name }}-deploy"
+        content: |
+          {{ ansible_user }} ALL=(root) NOPASSWD: /usr/bin/systemctl reload {{ fpm_service }}
+        owner: root
+        group: root
+        mode: "0440"
+        validate: /usr/sbin/visudo -cf %s
+
+  handlers:
+    - name: Przeładuj PHP-FPM
+      become: true
+      ansible.builtin.systemd:
+        name: "{{ fpm_service }}"
+        state: reloaded
+
+    - name: Przeładuj Apache
+      become: true
+      ansible.builtin.systemd:
+        name: apache2
+        state: reloaded

@@ -1,0 +1,19 @@
+---
+# Tu, a nie wcześniej: auto-scripts composera (cache:clear) czytają APP_ENV
+# z .env.local, które jest podpięte dopiero w tym kroku.
+- name: Zainstaluj zależności
+  ansible.builtin.command:
+    cmd: >-
+      {{ php_bin }} {{ composer_phar }} install
+      --no-dev --optimize-autoloader --classmap-authoritative
+      --no-interaction --no-progress
+    chdir: "{{ ansistrano_release_path.stdout }}"
+  environment:
+    APP_ENV: prod
+  changed_when: true
+
+- name: Sprawdź połączenie z bazą z nowego wydania
+  ansible.builtin.command:
+    cmd: "{{ php_bin }} bin/console dbal:run-sql 'SELECT COUNT(*) FROM products' --env=prod --no-debug"
+    chdir: "{{ ansistrano_release_path.stdout }}"
+  changed_when: false

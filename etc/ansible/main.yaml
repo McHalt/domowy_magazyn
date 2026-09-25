@@ -1,0 +1,6 @@
+---
+# Pełne postawienie od zera jednym przebiegiem:
+#   ansible-playbook main.yaml --ask-become-pass
+- ansible.builtin.import_playbook: provision.yaml
+- ansible.builtin.import_playbook: deploy.yaml
+- ansible.builtin.import_playbook: apache.yaml

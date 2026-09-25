@@ -1,0 +1,55 @@
+---
+- name: Zachowaj vhost sprzed Ansible'a
+  become: true
+  ansible.builtin.command:
+    cmd: "cp -p {{ apache_vhost_file }} {{ apache_vhost_file }}.pre-ansible"
+    creates: "{{ apache_vhost_file }}.pre-ansible"
+    removes: "{{ apache_vhost_file }}"
+
+- name: Wgraj vhost i przeładuj Apache
+  become: true
+  block:
+    - name: Wgraj vhost (https={{ https_enabled }})
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/templates/vhost.conf.j2"
+        dest: "{{ apache_vhost_file }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: vhost_result
+
+    - name: Włącz vhost
+      ansible.builtin.command:
+        cmd: "a2ensite {{ apache_vhost_file | basename }}"
+        creates: "/etc/apache2/sites-enabled/{{ apache_vhost_file | basename }}"
+      register: vhost_enabled
+
+    - name: Sprawdź konfigurację Apache
+      ansible.builtin.command: apache2ctl configtest
+      changed_when: false
+      when: vhost_result is changed or vhost_enabled is changed
+
+    - name: Przeładuj Apache
+      ansible.builtin.systemd:
+        name: apache2
+        state: reloaded
+      when: vhost_result is changed or vhost_enabled is changed
+
+  rescue:
+    - name: Przywróć poprzedni vhost
+      ansible.builtin.copy:
+        src: "{{ vhost_result.backup_file }}"
+        dest: "{{ apache_vhost_file }}"
+        remote_src: true
+        mode: "0644"
+      when: vhost_result is defined and vhost_result.backup_file is defined
+
+    - name: Wyłącz vhost włączony w tym przebiegu
+      ansible.builtin.command:
+        cmd: "a2dissite {{ apache_vhost_file | basename }}"
+      when: vhost_enabled is defined and vhost_enabled is changed
+
+    - name: Przerwij
+      ansible.builtin.fail:
+        msg: Nowy vhost nie przeszedł configtest albo przeładowania Apache — przywrócono poprzedni stan vhosta.

@@ -1,0 +1,42 @@
+---
+# Opcache i realpath cache w FPM trzymają ścieżki poprzedniego wydania
+# (DocumentRoot idzie przez dowiązanie `current`).
+- name: Przeładuj PHP-FPM
+  ansible.builtin.command:
+    cmd: "sudo -n /usr/bin/systemctl reload {{ fpm_service }}"
+  changed_when: true
+
+# Przed pierwszym apache.yaml domena serwuje jeszcze starą aplikację z html/.
+- name: Sprawdź, czy vhost wskazuje już na nową aplikację
+  ansible.builtin.command:
+    cmd: "grep -qF 'DocumentRoot {{ deploy_to }}/current/public' {{ apache_vhost_file }}"
+  register: vhost_points_to_current
+  changed_when: false
+  failed_when: vhost_points_to_current.rc not in [0, 1]
+
+- name: Sprawdź, czy strona odpowiada
+  ansible.builtin.uri:
+    url: "http://127.0.0.1{{ item }}"
+    headers:
+      Host: "{{ domain }}"
+    url_username: "{{ basic_auth_user | default(omit) }}"
+    url_password: "{{ basic_auth_password | default(omit) }}"
+    force_basic_auth: "{{ basic_auth_user is defined }}"
+    follow_redirects: none
+    status_code: [200, 301]
+  loop:
+    - /
+    - /products
+    - /groups
+  register: http_probe
+  retries: 5
+  delay: 2
+  until: http_probe is succeeded
+  when: vhost_points_to_current.rc == 0
+
+- name: Przypomnij o przełączeniu vhosta
+  ansible.builtin.debug:
+    msg: >-
+      Wydanie wdrożone, ale domena dalej serwuje starą aplikację z html/.
+      Przełączenie: ansible-playbook apache.yaml --ask-become-pass
+  when: vhost_points_to_current.rc != 0

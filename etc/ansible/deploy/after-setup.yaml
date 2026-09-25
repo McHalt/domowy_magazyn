@@ -1,0 +1,12 @@
+---
+- name: Utwórz katalog logów współdzielony między wydaniami
+  ansible.builtin.file:
+    path: "{{ ansistrano_shared_path }}/var/log"
+    state: directory
+    mode: "0755"
+
+- name: Wygeneruj .env.local
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/templates/env.local.j2"
+    dest: "{{ ansistrano_shared_path }}/.env.local"
+    mode: "0600"

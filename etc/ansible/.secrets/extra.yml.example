@@ -1,0 +1,21 @@
+---
+# Skopiuj do extra.yml i uzupełnij. Prawdziwy plik jest w .gitignore.
+# Wartości trafiają do shared/.env.local na serwerze w apostrofach, więc nie
+# mogą zawierać apostrofu (deploy to sprawdza).
+
+# Hasło z pola `pass` w Configs/db.conf starej aplikacji na serwerze.
+db_password: "zmien-mnie"
+
+# Dowolny losowy ciąg, np. wynik: openssl rand -hex 32
+app_secret: "zmien-mnie"
+
+# Stała PWD z api/pwd.php starej aplikacji — klienci API wysyłają ją jako ?pwd=.
+api_password: "zmien-mnie"
+
+# Basic Auth na całą stronę poza /api/ (apache.yaml).
+basic_auth_user: "zmien-mnie"
+basic_auth_password: "zmien-mnie"
+
+# Z Configs/send_notifs.conf starej aplikacji.
+onesignal_app_id: "zmien-mnie"
+onesignal_rest_api_key: "zmien-mnie"

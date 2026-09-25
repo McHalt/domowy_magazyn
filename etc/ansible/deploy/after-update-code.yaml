@@ -1,0 +1,8 @@
+---
+# var/ nie jedzie rsynciem, a ansistrano podpina var/log dowiązaniem —
+# bez katalogu nadrzędnego utworzenie dowiązania się wywala.
+- name: Utwórz var/ w wydaniu
+  ansible.builtin.file:
+    path: "{{ ansistrano_release_path.stdout }}/var"
+    state: directory
+    mode: "0755"
