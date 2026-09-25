@@ -39,6 +39,12 @@
   register: migrations_table
   changed_when: false
 
+- name: Utwórz tabelę wersji migracji
+  ansible.builtin.command:
+    cmd: "{{ php_bin }} bin/console doctrine:migrations:sync-metadata-storage --env=prod --no-debug"
+    chdir: "{{ ansistrano_release_path.stdout }}"
+  when: migrations_table.stdout | trim == '0'
+
 - name: Oznacz migracje bazowe jako wykonane
   ansible.builtin.command:
     argv: ["{{ php_bin }}", bin/console, doctrine:migrations:version, "{{ item }}", --add, --no-interaction, --env=prod, --no-debug]
