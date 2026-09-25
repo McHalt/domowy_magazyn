@@ -1,0 +1,67 @@
+{# Parametry: minStock (MinStockOverview), minStockErrors, action (URL formularza), noAmountHint #}
+{% macro amount(value) %}{{ value|round(3)|replace({'.': ','}) }}{% endmacro %}
+{% import _self as fmt %}
+
+<div class="card">
+    <div class="card-header fw-semibold">Stan minimalny</div>
+    <div class="card-body">
+        {% for error in minStockErrors %}
+            <div class="alert alert-danger py-2">{{ error }}</div>
+        {% endfor %}
+
+        <table class="table table-sm mb-3">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th class="text-center">Na stanie</th>
+                    <th class="text-center">Minimum</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr class="{{ minStock.packagesBelow ? 'table-danger' }}">
+                    <th>Opakowania</th>
+                    <td class="text-center">{{ minStock.packages }}</td>
+                    <td class="text-center">{{ minStock.minPackages ?? '—' }}</td>
+                </tr>
+                <tr class="{{ minStock.amountBelow ? 'table-danger' }}">
+                    <th>Ilość</th>
+                    {% if minStock.hasAmount %}
+                        <td class="text-center">{{ fmt.amount(minStock.amount) }} {{ minStock.unit.value }}</td>
+                        <td class="text-center">
+                            {% if minStock.minAmount is not null %}{{ fmt.amount(minStock.minAmount) }} {{ minStock.unit.value }}{% else %}—{% endif %}
+                        </td>
+                    {% else %}
+                        <td colspan="2" class="text-center text-muted small">{{ noAmountHint }}</td>
+                    {% endif %}
+                </tr>
+            </tbody>
+        </table>
+
+        {% if minStock.orphanedMinAmount %}
+            <div class="alert alert-warning py-2 small">
+                Zapisane minimum ilości nie jest sprawdzane: {{ noAmountHint|lower }}
+            </div>
+        {% endif %}
+
+        <form method="post" action="{{ action }}" class="row g-2 align-items-end">
+            <div class="col-sm-5">
+                <label class="form-label small mb-1" for="min_packages">Min. opakowań</label>
+                <input type="number" min="0" step="1" class="form-control form-control-sm"
+                       id="min_packages" name="min_packages" value="{{ minStock.minPackages }}">
+            </div>
+            <div class="col-sm-5">
+                <label class="form-label small mb-1" for="min_amount">
+                    Min. ilość{% if minStock.hasAmount %} ({{ minStock.unit.value }}){% endif %}
+                </label>
+                <input type="text" inputmode="decimal" class="form-control form-control-sm"
+                       id="min_amount" name="min_amount"
+                       value="{{ minStock.minAmount is not null ? fmt.amount(minStock.minAmount) }}"
+                       {{ minStock.hasAmount ? '' : 'disabled' }}>
+            </div>
+            <div class="col-sm-2 d-grid">
+                <button type="submit" class="btn btn-sm btn-primary">Zapisz</button>
+            </div>
+            <div class="col-12 form-text">Puste pole usuwa minimum.</div>
+        </form>
+    </div>
+</div>

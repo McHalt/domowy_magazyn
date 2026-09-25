@@ -17,3 +17,60 @@
     cmd: "{{ php_bin }} bin/console dbal:run-sql 'SELECT COUNT(*) FROM products' --env=prod --no-debug"
     chdir: "{{ ansistrano_release_path.stdout }}"
   changed_when: false
+
+# Baza produkcyjna pochodzi ze starej aplikacji: tabele z migracji bazowych już
+# istnieją, a Doctrine nie ma jeszcze tabeli wersji. Bez oznaczenia pierwsza
+# migracja zrobiłaby CREATE TABLE na istniejących tabelach.
+- name: Sprawdź, czy baza ma tabelę wersji migracji
+  ansible.builtin.command:
+    argv:
+      - mysql
+      - "--host={{ db_host }}"
+      - "--port={{ db_port }}"
+      - "--user={{ db_user }}"
+      - --batch
+      - --skip-column-names
+      - --execute
+      - >-
+        SELECT COUNT(*) FROM information_schema.tables
+        WHERE table_schema = '{{ db_name }}' AND table_name = 'doctrine_migration_versions'
+  environment:
+    MYSQL_PWD: "{{ db_password }}"
+  register: migrations_table
+  changed_when: false
+
+- name: Oznacz migracje bazowe jako wykonane
+  ansible.builtin.command:
+    argv: ["{{ php_bin }}", bin/console, doctrine:migrations:version, "{{ item }}", --add, --no-interaction, --env=prod, --no-debug]
+    chdir: "{{ ansistrano_release_path.stdout }}"
+  loop: "{{ migrations_baseline }}"
+  when: migrations_table.stdout | trim == '0'
+
+- name: Sprawdź, czy są nowe migracje
+  ansible.builtin.command:
+    cmd: "{{ php_bin }} bin/console doctrine:migrations:up-to-date --env=prod --no-debug"
+    chdir: "{{ ansistrano_release_path.stdout }}"
+  register: migrations_up_to_date
+  changed_when: false
+  failed_when: migrations_up_to_date.rc not in [0, 1]
+
+- name: Kopia bazy przed migracją
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      umask 077 && mkdir -p {{ deploy_to }}/backups &&
+      mysqldump --host={{ db_host }} --port={{ db_port }} --user={{ db_user }}
+      --single-transaction --no-tablespaces {{ db_name }}
+      > {{ deploy_to }}/backups/{{ db_name }}-{{ ansistrano_release_version }}.sql
+    executable: /bin/bash
+  environment:
+    MYSQL_PWD: "{{ db_password }}"
+  when: migrations_up_to_date.rc == 1
+
+# Przed przełączeniem `current`: migracje muszą być zgodne wstecz, bo przez
+# chwilę stary kod działa już na nowym schemacie.
+- name: Uruchom migracje
+  ansible.builtin.command:
+    cmd: "{{ php_bin }} bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration --env=prod --no-debug"
+    chdir: "{{ ansistrano_release_path.stdout }}"
+  when: migrations_up_to_date.rc == 1

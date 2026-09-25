@@ -55,6 +55,32 @@ class Product
         return $this->history->filter(fn(ProductHistory $h) => $h->isActive())->count();
     }
 
+    public function getUnit(): ?Unit
+    {
+        return Unit::fromLabel($this->getFeaturesMap()['unit'] ?? null);
+    }
+
+    /** „Ilość w opakowaniu” w jednostce produktu; null gdy brak lub niepoprawna */
+    public function getAmountPerPackage(): ?float
+    {
+        $raw = str_replace(',', '.', trim($this->getFeaturesMap()['qty in package'] ?? ''));
+
+        return is_numeric($raw) && (float)$raw > 0 ? (float)$raw : null;
+    }
+
+    /** Ilość na stanie w jednostce bazowej (szt, g, ml); null gdy produkt nie ma jednostki lub ilości w opakowaniu */
+    public function getBaseAmount(): ?float
+    {
+        $unit = $this->getUnit();
+        $perPackage = $this->getAmountPerPackage();
+
+        if ($unit === null || $perPackage === null) {
+            return null;
+        }
+
+        return $this->getQty() * $perPackage * $unit->toBaseFactor();
+    }
+
     /** Najniższy koszt zakupu (w złotych) wśród wpisów z kosztem > 0 */
     public function getLowestCost(): float
     {

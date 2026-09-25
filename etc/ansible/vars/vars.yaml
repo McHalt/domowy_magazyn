@@ -34,4 +34,10 @@ db_name: domowy_magazyn
 db_user: domowymagazyn
 db_server_version: "8.0.46"
 
+# Migracje, których tabele baza produkcyjna miała już przed Doctrine (stara
+# aplikacja). Deploy oznacza je jako wykonane, jeśli nie ma tabeli wersji.
+migrations_baseline:
+  - 'DoctrineMigrations\Version20260223135128'
+  - 'DoctrineMigrations\Version20260225143159'
+
 ansistrano_keep_releases: 3

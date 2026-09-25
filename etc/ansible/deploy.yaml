@@ -6,12 +6,9 @@
 # PHP-FPM, dopuszczone w sudoers przez provision.yaml.
 #
 # Ansistrano w trybie rsync pcha working tree z laptopa (nie commit) do nowego
-# katalogu w releases/. `current` przeskakuje dopiero, gdy composer, cache i
-# połączenie z bazą w nowym wydaniu przeszły — nieudany deploy nie psuje
-# działającej strony.
-#
-# Migracje Doctrine celowo nie są uruchamiane: baza produkcyjna pochodzi ze
-# starej aplikacji, a pierwsza migracja robi CREATE TABLE (patrz README).
+# katalogu w releases/. `current` przeskakuje dopiero, gdy composer, połączenie
+# z bazą i migracje w nowym wydaniu przeszły — nieudany deploy nie psuje
+# działającej strony. Przed migracjami robiona jest kopia bazy (backups/).
 - name: Deploy domowego magazynu
   hosts: prod
   gather_facts: true

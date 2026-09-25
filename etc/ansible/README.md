@@ -85,6 +85,7 @@ ansible-playbook rollback.yaml
 │   ├── .env.local              generowany z .secrets/extra.yml przy każdym deployu
 │   ├── .htpasswd               Basic Auth, generowany przez apache.yaml
 │   └── var/log/                logi Symfony i php-fpm.log
+├── backups/                    kopie bazy sprzed migracji
 ├── tools/composer.phar         Composer z apt (2.2.6) jest za stary na PHP 8.3
 └── html/                       STARA aplikacja sprzed migracji — patrz niżej
 
@@ -96,15 +97,23 @@ ansible-playbook rollback.yaml
 
 ## Baza danych
 
-Aplikacja działa na **istniejącej bazie produkcyjnej bez zmian** (`domowy_magazyn`,
-użytkownik `domowymagazyn`) — sprawdzone lokalnie na dumpie z 2026-09-25:
-wszystkie strony produktów i grup oraz API zwracają 200.
+Baza produkcyjna (`domowy_magazyn`, użytkownik `domowymagazyn`) pochodzi ze
+starej aplikacji. Tabele z dwóch pierwszych migracji Doctrine istniały w niej
+wcześniej, więc deploy przy pierwszym uruchomieniu migracji oznacza je jako
+wykonane (`migrations_baseline` w `vars/vars.yaml`) zamiast je puszczać —
+`Version20260223135128` robi `CREATE TABLE` i by się wywaliła.
 
-Deploy **nie uruchamia migracji Doctrine**. Pierwsza migracja
-(`Version20260223135128`) robi `CREATE TABLE` i na bazie produkcyjnej by się
-wywaliła. Schemat różni się od mapowania tylko indeksami, kluczami obcymi i
-dwiema nieużywanymi tabelami (`categories`, `products_to_categories`) — widać
-to w `bin/console doctrine:schema:validate`.
+Każdy deploy z nowymi migracjami:
+
+1. robi kopię bazy do `backups/<baza>-<wydanie>.sql`,
+2. uruchamia `doctrine:migrations:migrate` **przed** przełączeniem `current`.
+
+Przez chwilę stary kod działa więc na nowym schemacie — migracje muszą być
+zgodne wstecz (np. nowe kolumny nullowe). Rollback kodu nie cofa migracji.
+
+Schemat nadal różni się od mapowania indeksami, kluczami obcymi i dwiema
+nieużywanymi tabelami (`categories`, `products_to_categories`) — widać to w
+`bin/console doctrine:schema:validate`. Nie ma na to migracji; świadomie.
 
 ## Pułapki
 

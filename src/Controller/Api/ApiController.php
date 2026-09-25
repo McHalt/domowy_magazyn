@@ -4,10 +4,13 @@ namespace App\Controller\Api;
 
 use App\Entity\Product;
 use App\Entity\ProductToFeature;
+use App\Entity\Unit;
 use App\Repository\FeatureRepository;
 use App\Repository\ProductHistoryRepository;
 use App\Repository\ProductRepository;
 use App\Repository\ProductsGroupRepository;
+use App\Service\MinStockManager;
+use App\Service\UnitConsistencyChecker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
@@ -41,6 +44,8 @@ class ApiController extends AbstractController
         ProductsGroupRepository $groupRepo,
         ProductHistoryRepository $historyRepo,
         EntityManagerInterface $em,
+        UnitConsistencyChecker $unitChecker,
+        MinStockManager $minStock,
     ): Response {
         // Weryfikacja hasła (kompatybilne z api/pwd.php)
         if ($this->apiPassword !== '' && $request->query->get('pwd') !== $this->apiPassword) {
@@ -51,7 +56,7 @@ class ApiController extends AbstractController
 
         return match ($page) {
             'ViewProduct'   => $this->viewProduct($request, $productRepo, $featureRepo),
-            'EditProduct'   => $this->editProduct($request, $productRepo, $featureRepo, $groupRepo, $historyRepo, $em),
+            'EditProduct'   => $this->editProduct($request, $productRepo, $featureRepo, $groupRepo, $historyRepo, $em, $unitChecker, $minStock),
             'RemoveProduct' => $this->removeProduct($request, $productRepo, $em),
             'Main'          => $this->main($productRepo),
             'Products'      => $this->products($productRepo),
@@ -106,10 +111,13 @@ class ApiController extends AbstractController
         FeatureRepository $featureRepo,
         ProductsGroupRepository $groupRepo,
         ProductHistoryRepository $historyRepo,
-        EntityManagerInterface $em
+        EntityManagerInterface $em,
+        UnitConsistencyChecker $unitChecker,
+        MinStockManager $minStock
     ): Response {
+        // groups[] przychodzi jako tablica — htmlspecialchars() na tablicy rzuca TypeError.
         $vars = array_map(
-            'htmlspecialchars',
+            fn($value) => is_string($value) ? htmlspecialchars($value) : $value,
             array_merge($request->query->all(), $request->request->all())
         );
 
@@ -134,6 +142,32 @@ class ApiController extends AbstractController
         $costGrosze = (int)((float)$cost * 100);
         $expirationDate = $vars['expiration_date'] ?? null;
 
+        $featuresInput = [];
+        foreach ($vars as $key => $value) {
+            if (!empty($value) && str_starts_with($key, 'feature_')) {
+                $featureName = $featureRepo->resolveFormFieldName(substr($key, 8));
+                $featuresInput[$featureName] = $value;
+            }
+        }
+
+        $postedGroups = [];
+        foreach ($request->request->all('groups') as $groupId) {
+            $group = $groupRepo->find((int)$groupId);
+            if ($group) {
+                $postedGroups[] = $group;
+            }
+        }
+
+        $unitErrors = $unitChecker->checkProduct(
+            $featuresInput ? Unit::fromLabel($featuresInput['unit'] ?? null) : $product?->getUnit(),
+            $postedGroups ?: ($product?->getGroups() ?? []),
+        );
+        $oldUnit = $product?->getUnit();
+
+        if ($unitErrors) {
+            return new JsonResponse(['status' => 'error', 'errors' => $unitErrors], Response::HTTP_UNPROCESSABLE_ENTITY);
+        }
+
         if (!$product) {
             $product = new Product();
             $product->setEan($ean ?? '');
@@ -148,14 +182,6 @@ class ApiController extends AbstractController
         }
 
         // Cechy
-        $featuresInput = [];
-        foreach ($vars as $key => $value) {
-            if (!empty($value) && str_starts_with($key, 'feature_')) {
-                $featureName = substr($key, 8);
-                $featuresInput[$featureName] = $value;
-            }
-        }
-
         if (!empty($featuresInput)) {
             $featuresByName = [];
             foreach ($featureRepo->findAll() as $feature) {
@@ -173,19 +199,17 @@ class ApiController extends AbstractController
                 $ptf->setValue($value);
                 $em->persist($ptf);
             }
+
+            $minStock->dropProductAmountRuleOnUnitChange($product, $oldUnit, Unit::fromLabel($featuresInput['unit'] ?? null));
         }
 
         // Grupy
-        $postGroups = $request->request->all('groups');
-        if (!empty($postGroups)) {
+        if (!empty($postedGroups)) {
             foreach ($product->getGroups() as $g) {
                 $product->getGroups()->removeElement($g);
             }
-            foreach ($postGroups as $groupId) {
-                $group = $groupRepo->find((int)$groupId);
-                if ($group) {
-                    $product->getGroups()->add($group);
-                }
+            foreach ($postedGroups as $group) {
+                $product->getGroups()->add($group);
             }
         }
 

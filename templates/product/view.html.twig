@@ -79,6 +79,15 @@
     </div>
 </div>
 
+<div class="row g-3 mt-0">
+    <div class="col-md-7">
+        {% include '_min_stock_card.html.twig' with {
+            action: path('product_min_stock', {id: product.id}),
+            noAmountHint: 'Uzupełnij w produkcie cechy „jednostka” (szt, g, kg, ml, l) i „ilość w opakowaniu”.',
+        } %}
+    </div>
+</div>
+
 <div class="mt-3">
     <a href="{{ path('product_edit', {id: product.id}) }}" class="btn btn-outline-primary btn-sm">✏️ Edytuj produkt</a>
 </div>
