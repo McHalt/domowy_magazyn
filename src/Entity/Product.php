@@ -173,14 +173,14 @@ class Product
      * Deaktywuje sztuki o danej dacie ważności (lub NULL).
      * Zwraca liczbę zdeaktywowanych wpisów.
      */
-    public function deactivateByExpirationDate(?string $date, int $limit = 1): int
+    public function deactivateByExpirationDate(?string $date, int $limit = 1, ?string $removedBy = null): int
     {
         $deactivated = 0;
         foreach ($this->history as $h) {
             if ($deactivated >= $limit) break;
             if (!$h->isActive()) continue;
             if ($h->getExpirationDateString() === $date) {
-                $h->setActive(0);
+                $h->remove($removedBy);
                 $deactivated++;
             }
         }

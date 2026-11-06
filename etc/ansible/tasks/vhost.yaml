@@ -1,0 +1,89 @@
+---
+# Kopia każdego zmienionego pliku, configtest i łagodne przeładowanie; przy błędzie powrót do stanu sprzed przebiegu.
+- name: Wgraj konfigurację Apache i przeładuj
+  vars:
+    apache_changed: >-
+      {{ [headers_module, version_conf, version_conf_enabled, vhost_conf, vhost_enabled]
+         | select('changed') | list | length > 0 }}
+  block:
+    - name: Włącz mod_headers
+      community.general.apache2_module:
+        name: headers
+        state: present
+      register: headers_module
+
+    # Cały serwer; po security.conf z pakietu (którego nie zmieniamy, żeby aktualizacje apache2 nie pytały o plik).
+    - name: Ukryj wersję Apache i systemu
+      ansible.builtin.copy:
+        content: |
+          ServerTokens Prod
+          ServerSignature Off
+        dest: "/etc/apache2/conf-available/{{ apache_version_conf }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: version_conf
+
+    - name: Włącz ukrycie wersji
+      ansible.builtin.command:
+        cmd: "a2enconf {{ apache_version_conf | splitext | first }}"
+        creates: "/etc/apache2/conf-enabled/{{ apache_version_conf }}"
+      register: version_conf_enabled
+
+    - name: Wgraj virtual host (https={{ https_enabled }})
+      ansible.builtin.template:
+        src: templates/vhost.conf.j2
+        dest: "{{ apache_vhost_file }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: vhost_conf
+
+    - name: Włącz virtual host
+      ansible.builtin.command:
+        cmd: "a2ensite {{ apache_vhost_file | basename }}"
+        creates: "/etc/apache2/sites-enabled/{{ apache_vhost_file | basename }}"
+      register: vhost_enabled
+
+    - name: Sprawdź konfigurację Apache
+      ansible.builtin.command:
+        cmd: apache2ctl configtest
+      changed_when: false
+      when: apache_changed
+
+    - name: Przeładuj Apache
+      ansible.builtin.systemd_service:
+        name: apache2
+        state: reloaded
+      when: apache_changed
+
+  rescue:
+    - name: Przywróć poprzednie pliki
+      ansible.builtin.copy:
+        src: "{{ item.backup_file }}"
+        dest: "{{ item.dest }}"
+        remote_src: true
+        mode: "0644"
+      loop: >-
+        {{ [version_conf | default({}), vhost_conf | default({})]
+           | selectattr('backup_file', 'defined') | list }}
+      loop_control:
+        label: "{{ item.dest }}"
+
+    - name: Wyłącz virtual host włączony w tym przebiegu
+      ansible.builtin.command:
+        cmd: "a2dissite {{ apache_vhost_file | basename }}"
+      when: vhost_enabled is defined and vhost_enabled is changed
+      changed_when: true
+
+    - name: Wyłącz ukrycie wersji włączone w tym przebiegu
+      ansible.builtin.command:
+        cmd: "a2disconf {{ apache_version_conf | splitext | first }}"
+      when: version_conf_enabled is defined and version_conf_enabled is changed
+      changed_when: true
+
+    - name: Przerwij
+      ansible.builtin.fail:
+        msg: Nowa konfiguracja nie przeszła configtest albo przeładowania Apache; przywrócono poprzedni stan (Apache działa na starej konfiguracji).

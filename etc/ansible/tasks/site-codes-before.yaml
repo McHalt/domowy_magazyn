@@ -1,0 +1,26 @@
+---
+- name: Zapisz odpowiedzi innych stron przed zmianami
+  ansible.builtin.command:
+    argv: [curl, -sk, -o, /dev/null, -w, "%{http_code}", --max-time, "15",
+           --resolve, "{{ item.1 }}:{{ {'http': 80, 'https': 443}[item.0] }}:127.0.0.1",
+           "{{ item | join('://') }}/"]
+  loop: "{{ ['http', 'https'] | product(server_sites | reject('equalto', domain)) | list }}"
+  loop_control:
+    label: "{{ item | join('://') }}"
+  register: sites_before
+  check_mode: false
+  changed_when: false
+  failed_when: false
+
+# Strony bez własnego vhosta :443 trafiają do tego vhosta (jest pierwszy alfabetycznie), więc ich https
+# odpowiada dziś 401 z Basic Auth, a po zmianie 404; to oczekiwana różnica.
+- name: Zapamiętaj odpowiedzi stron
+  ansible.builtin.set_fact:
+    site_codes_before: "{{ dict(sites_before.results | map(attribute='item') | map('join', '://') | zip(sites_before.results | map(attribute='stdout'))) }}"
+    site_codes_ignored: >-
+      {{ sites_before.results | selectattr('item.0', 'eq', 'https') | selectattr('stdout', 'eq', '401')
+         | map(attribute='item') | map('join', '://') | list }}
+
+- name: Pokaż odpowiedzi stron
+  ansible.builtin.debug:
+    var: site_codes_before

@@ -2,6 +2,8 @@
 
 namespace App\Controller;
 
+use App\Hub\Security\RequireScope;
+use App\Hub\Security\Scopes;
 use App\Repository\ProductRepository;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,6 +12,7 @@ use Symfony\Component\Routing\Attribute\Route;
 class MainController extends AbstractController
 {
     #[Route('/', name: 'main')]
+    #[RequireScope(Scopes::READ)]
     public function index(ProductRepository $productRepo): Response
     {
         $products = $productRepo->findAllWithRelations();

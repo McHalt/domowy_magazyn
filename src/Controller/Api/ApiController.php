@@ -5,12 +5,13 @@ namespace App\Controller\Api;
 use App\Entity\Product;
 use App\Entity\ProductToFeature;
 use App\Entity\Unit;
+use App\Hub\Security\PublicEndpoint;
 use App\Repository\FeatureRepository;
 use App\Repository\ProductHistoryRepository;
 use App\Repository\ProductRepository;
 use App\Repository\ProductsGroupRepository;
 use App\Service\MinStockManager;
-use App\Service\NameNormalizer;
+use App\Service\StockLookup;
 use App\Service\UnitConsistencyChecker;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -32,6 +33,7 @@ use Symfony\Component\Routing\Attribute\Route;
  *   GET      /api/index.php?p=find_stocks&pwd=X&name=NAZWA
  */
 #[Route('/api/index.php', name: 'api_dispatch')]
+#[PublicEndpoint]
 class ApiController extends AbstractController
 {
     public function __construct(
@@ -48,7 +50,7 @@ class ApiController extends AbstractController
         EntityManagerInterface $em,
         UnitConsistencyChecker $unitChecker,
         MinStockManager $minStock,
-        NameNormalizer $normalizer,
+        StockLookup $lookup,
     ): Response {
         // Weryfikacja hasła (kompatybilne z api/pwd.php)
         if ($this->apiPassword !== '' && $request->query->get('pwd') !== $this->apiPassword) {
@@ -63,7 +65,7 @@ class ApiController extends AbstractController
             'RemoveProduct' => $this->removeProduct($request, $productRepo, $em),
             'Main'          => $this->main($productRepo),
             'Products'      => $this->products($productRepo),
-            'find_stocks'   => $this->findStocks($request, $productRepo, $groupRepo, $normalizer),
+            'find_stocks'   => $this->findStocks($request, $lookup),
             default        => new Response('', 200),
         };
     }
@@ -311,41 +313,14 @@ class ApiController extends AbstractController
         return new JsonResponse($result);
     }
 
-    private function findStocks(
-        Request $request,
-        ProductRepository $productRepo,
-        ProductsGroupRepository $groupRepo,
-        NameNormalizer $normalizer,
-    ): Response {
-        $needle = $normalizer->normalize($request->query->getString('name'));
-
-        $matches = [];
-        $type = null;
-
-        if ($needle !== '') {
-            foreach ($groupRepo->findAll() as $group) {
-                if ($normalizer->normalize($group->getName()) === $needle) {
-                    $matches[] = ['id' => $group->getId(), 'name' => $group->getName(), 'qty' => $group->getQty()];
-                }
-            }
-            $type = $matches ? 'group' : null;
-
-            if (!$matches) {
-                foreach ($productRepo->findAllWithRelations() as $product) {
-                    $name = $product->getFeaturesMap()['name'] ?? '';
-                    if ($normalizer->normalize($name) === $needle) {
-                        $matches[] = ['id' => $product->getId(), 'name' => $name, 'qty' => $product->getQty()];
-                    }
-                }
-                $type = $matches ? 'product' : null;
-            }
-        }
+    private function findStocks(Request $request, StockLookup $lookup): Response
+    {
+        $result = $lookup->find($request->query->getString('name'));
 
         return new JsonResponse([
-            'type'    => $type,
-            'qty'     => array_sum(array_column($matches, 'qty')),
-            'matches' => $matches,
+            'type'    => $result['type'],
+            'qty'     => array_sum(array_column($result['matches'], 'qty')),
+            'matches' => $result['matches'],
         ]);
     }
-
 }

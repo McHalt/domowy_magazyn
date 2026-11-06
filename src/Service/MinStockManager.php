@@ -22,8 +22,12 @@ final class MinStockManager
 
     public function overview(Product|ProductsGroup $target): MinStockOverview
     {
-        $rules = $this->ruleRepo->findForTarget($target);
+        return $this->overviewWithRules($target, $this->ruleRepo->findForTarget($target));
+    }
 
+    /** @param array<string, MinStockRule> $rules reguły celu, klucz: MinStockBasis->value */
+    public function overviewWithRules(Product|ProductsGroup $target, array $rules): MinStockOverview
+    {
         return new MinStockOverview(
             packages: $target->getQty(),
             minPackages: ($rules[MinStockBasis::Packages->value] ?? null)?->getMinStock(),
@@ -37,7 +41,7 @@ final class MinStockManager
      * Minimum ilości podaje się w jednostce produktu (cecha `unit`) albo grupy. Pusty input usuwa regułę,
      * null (pole nie przyszło — wyłączone w formularzu) zostawia ją bez zmian.
      *
-     * @return string[] błędy walidacji — gdy niepuste, nic nie zostało zmienione
+     * @return array<string, string> błędy walidacji (klucz: `packages` albo `amount`) — gdy niepuste, nic nie zostało zmienione
      */
     public function update(Product|ProductsGroup $target, string $minPackagesInput, ?string $minAmountInput): array
     {
@@ -111,7 +115,7 @@ final class MinStockManager
         }
 
         if (!ctype_digit($input) || (int)$input > self::MAX_VALUE) {
-            $errors[] = 'Minimalna liczba opakowań musi być dodatnią liczbą całkowitą.';
+            $errors['packages'] = 'Minimalna liczba opakowań musi być dodatnią liczbą całkowitą.';
             return null;
         }
 
@@ -126,7 +130,7 @@ final class MinStockManager
         }
 
         if ($unit === null) {
-            $errors[] = $target instanceof ProductsGroup
+            $errors['amount'] = $target instanceof ProductsGroup
                 ? 'Aby ustawić minimalną ilość, wybierz jednostkę grupy.'
                 : 'Aby ustawić minimalną ilość, uzupełnij w produkcie cechy „jednostka” i „ilość w opakowaniu”.';
             return null;
@@ -134,7 +138,7 @@ final class MinStockManager
 
         $baseAmount = is_numeric($input) ? (int)round((float)$input * $unit->toBaseFactor()) : 0;
         if ($baseAmount < 1 || $baseAmount > self::MAX_VALUE) {
-            $errors[] = sprintf('Minimalna ilość musi być dodatnią liczbą (w %s).', $unit->value);
+            $errors['amount'] = sprintf('Minimalna ilość musi być dodatnią liczbą (w %s).', $unit->value);
             return null;
         }
 

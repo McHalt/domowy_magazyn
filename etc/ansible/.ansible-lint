@@ -1,0 +1,4 @@
+---
+# Role ansistrano z Galaxy (requirements.yml) to kod zewnętrzny.
+exclude_paths:
+  - ~/.ansible/roles/

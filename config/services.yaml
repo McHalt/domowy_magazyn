@@ -12,3 +12,40 @@ services:
             - '../src/DependencyInjection/'
             - '../src/Entity/'
             - '../src/Kernel.php'
+
+    Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler:
+        factory: ['@App\Session\PdoSessionHandlerFactory', create]
+
+    hub.http_client:
+        class: GuzzleHttp\Client
+        public: true
+        arguments:
+            -
+                timeout: 5
+                connect_timeout: 3
+                http_errors: false
+                allow_redirects: false
+                headers:
+                    Accept: application/json
+                    User-Agent: DomowyMagazyn/1
+
+    App\Hub\HubConfig:
+        arguments:
+            $publicUrl: '%env(APP_PUBLIC_URL)%'
+            $issuer: '%env(HUB_ISSUER)%'
+            $internalUrl: '%env(HUB_INTERNAL_URL)%'
+            $clientId: '%env(HUB_CLIENT_ID)%'
+            $clientSecret: '%env(HUB_CLIENT_SECRET)%'
+            $eventKey: '%env(HUB_EVENT_KEY)%'
+
+    App\Hub\Jwt\JwksProvider:
+        arguments:
+            $http: '@hub.http_client'
+
+    App\Hub\Oidc\OidcClient:
+        arguments:
+            $http: '@hub.http_client'
+
+    App\Hub\Events\EventSender:
+        arguments:
+            $http: '@hub.http_client'

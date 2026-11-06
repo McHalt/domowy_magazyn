@@ -4,6 +4,8 @@ namespace App\Controller;
 
 use App\Entity\ProductsGroup;
 use App\Entity\Unit;
+use App\Hub\Security\RequireScope;
+use App\Hub\Security\Scopes;
 use App\Repository\ProductsGroupRepository;
 use App\Service\MinStockManager;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -14,6 +16,7 @@ use Symfony\Component\Routing\Attribute\Route;
 class GroupController extends AbstractController
 {
     #[Route('/groups', name: 'groups_list')]
+    #[RequireScope(Scopes::READ)]
     public function list(ProductsGroupRepository $groupRepo): Response
     {
         return $this->render('group/list.html.twig', [
@@ -22,12 +25,14 @@ class GroupController extends AbstractController
     }
 
     #[Route('/groups/{id}', name: 'group_view', requirements: ['id' => '\d+'])]
+    #[RequireScope(Scopes::READ)]
     public function view(int $id, ProductsGroupRepository $groupRepo, MinStockManager $minStock): Response
     {
         return $this->renderGroupView($this->findGroup($id, $groupRepo), $minStock, []);
     }
 
     #[Route('/groups/{id}/min-stock', name: 'group_min_stock', requirements: ['id' => '\d+'], methods: ['POST'])]
+    #[RequireScope(Scopes::ADMIN)]
     public function updateMinStock(
         int $id,
         Request $request,
@@ -48,6 +53,7 @@ class GroupController extends AbstractController
     }
 
     #[Route('/groups/{id}/unit', name: 'group_unit', requirements: ['id' => '\d+'], methods: ['POST'])]
+    #[RequireScope(Scopes::ADMIN)]
     public function updateUnit(
         int $id,
         Request $request,
@@ -69,6 +75,7 @@ class GroupController extends AbstractController
     }
 
     #[Route('/groups/add', name: 'group_add', methods: ['GET', 'POST'])]
+    #[RequireScope(Scopes::ADMIN)]
     public function add(Request $request, ProductsGroupRepository $groupRepo): Response
     {
         if ($request->isMethod('POST') && $request->request->get('name')) {

@@ -1,0 +1,14 @@
+/.gitattributes export-ignore
+/.claude export-ignore
+/.idea export-ignore
+/old export-ignore
+/docker export-ignore
+/docker-compose.yml export-ignore
+/etc export-ignore
+/MIGRATION.md export-ignore
+/tests export-ignore
+/phpunit.dist.xml export-ignore
+/.env.test export-ignore
+/docs export-ignore
+/etc/ansible/** text eol=lf
+*.sh text eol=lf

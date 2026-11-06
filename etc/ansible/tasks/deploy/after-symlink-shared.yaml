@@ -1,0 +1,65 @@
+---
+# Przed przełączeniem `current`; błąd tutaj usuwa nowe wydanie. Auto-skrypty composera (cache:clear) czytają
+# APP_ENV z .env.local, dowiązanego dopiero w tym kroku.
+- name: Zainstaluj zależności
+  ansible.builtin.command:
+    cmd: >-
+      {{ php_bin }} {{ composer_phar }} install
+      --no-dev --optimize-autoloader --classmap-authoritative
+      --no-interaction --no-progress
+    chdir: "{{ ansistrano_release_path }}"
+  environment:
+    APP_ENV: prod
+  changed_when: true
+
+- name: Sprawdź połączenie z bazą z nowego wydania
+  ansible.builtin.command:
+    cmd: "{{ php_bin }} bin/console dbal:run-sql 'SELECT COUNT(*) FROM products' --env=prod --no-debug"
+    chdir: "{{ ansistrano_release_path }}"
+  changed_when: false
+
+- name: Przygotuj tabelę wersji migracji
+  ansible.builtin.command:
+    cmd: "{{ php_bin }} bin/console doctrine:migrations:sync-metadata-storage --env=prod --no-debug"
+    chdir: "{{ ansistrano_release_path }}"
+  changed_when: false
+
+- name: Sprawdź, czy są nowe migracje
+  ansible.builtin.command:
+    cmd: "{{ php_bin }} bin/console doctrine:migrations:up-to-date --env=prod --no-debug"
+    chdir: "{{ ansistrano_release_path }}"
+  register: migrations_up_to_date
+  changed_when: false
+  failed_when: migrations_up_to_date.rc not in [0, 1]
+
+- name: Zrzuć bazę przed migracjami
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail && umask 077 &&
+      mysqldump --defaults-extra-file={{ secrets_dir }}/my.cnf --single-transaction --no-tablespaces {{ db_name }}
+      | gzip > {{ deploy_to }}/backups/{{ db_name }}-{{ ansistrano_release_version }}.sql.gz
+    executable: /bin/bash
+  when: migrations_up_to_date.rc == 1
+  changed_when: true
+
+- name: Znajdź zrzuty bazy
+  ansible.builtin.find:
+    paths: "{{ deploy_to }}/backups"
+    patterns: "{{ db_name }}-*.sql.gz"
+  register: db_dumps
+
+- name: Usuń najstarsze zrzuty bazy
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ (db_dumps.files | sort(attribute='mtime', reverse=true))[db_dumps_keep | int :] }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
+# Przed przełączeniem: migracje muszą być zgodne wstecz, bo przez chwilę stary kod działa na nowym schemacie.
+- name: Uruchom migracje
+  ansible.builtin.command:
+    cmd: "{{ php_bin }} bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration --env=prod --no-debug"
+    chdir: "{{ ansistrano_release_path }}"
+  when: migrations_up_to_date.rc == 1
+  changed_when: true

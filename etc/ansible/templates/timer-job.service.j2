@@ -1,0 +1,21 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Domowy magazyn: {{ item.description }}
+After=network-online.target mysql.service
+Wants=network-online.target
+# Przed pierwszym wdrożeniem nie ma kodu.
+ConditionPathExists={{ deploy_to }}/current/bin/console
+
+[Service]
+Type=oneshot
+User={{ app_user }}
+Group={{ app_user }}
+WorkingDirectory={{ deploy_to }}/current
+ExecStart={{ php_bin }} bin/console {{ item.command }} --no-interaction
+TimeoutStartSec={{ item.timeout }}
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+MemoryMax=256M

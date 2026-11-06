@@ -1,0 +1,32 @@
+---
+# Także po rollback.yaml. Opcache i realpath cache PHP-FPM trzymają ścieżki poprzedniego wydania.
+- name: Przeładuj PHP-FPM
+  ansible.builtin.command:
+    cmd: "sudo -n /usr/bin/systemctl reload {{ fpm_service }}"
+  changed_when: true
+
+# Do przełączenia vhosta przez apache.yaml domena serwuje jeszcze poprzednią instalację.
+- name: Sprawdź, czy vhost wskazuje już na to wdrożenie
+  ansible.builtin.command:
+    cmd: "grep -qF 'DocumentRoot {{ deploy_to }}/current/public' {{ apache_vhost_file }}"
+  register: vhost_points_to_current
+  changed_when: false
+  failed_when: vhost_points_to_current.rc not in [0, 1]
+
+# Certyfikat sprawdza apache.yaml; tu tylko, czy aplikacja żyje.
+- name: Sprawdź /healthz
+  ansible.builtin.command:
+    argv: [curl, -sSk, --max-time, "10", --resolve, "{{ domain }}:443:127.0.0.1", "https://{{ domain }}/healthz"]
+  register: healthz
+  until: healthz.rc == 0 and healthz.stdout == '{"status":"ok"}'
+  retries: 5
+  delay: 2
+  changed_when: false
+  when: vhost_points_to_current.rc == 0
+
+- name: Przypomnij o przełączeniu vhosta
+  ansible.builtin.debug:
+    msg: >-
+      Wydanie wdrożone, ale domena dalej serwuje poprzednią instalację.
+      Przełączenie: ansible-playbook apache.yaml --ask-become-pass
+  when: vhost_points_to_current.rc != 0

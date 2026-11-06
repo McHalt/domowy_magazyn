@@ -6,4 +6,7 @@
 /vendor/
 /docker/mysql/data/
 /etc/ansible/.secrets/extra.yml
+/etc/ansible/ansible.log
 /.idea/
+/.phpunit.cache/
+/phpunit.xml

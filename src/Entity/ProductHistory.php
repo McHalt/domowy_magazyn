@@ -32,6 +32,16 @@ class ProductHistory
     #[ORM\Column(type: Types::DATE_MUTABLE, nullable: true)]
     private ?\DateTimeInterface $expirationDate = null;
 
+    /** `sub` domownika z huba; bez klucza obcego (tabela MyISAM), NULL dla wpisów sprzed integracji i z legacy API */
+    #[ORM\Column(length: 36, nullable: true)]
+    private ?string $addedBy = null;
+
+    #[ORM\Column(length: 36, nullable: true)]
+    private ?string $removedBy = null;
+
+    #[ORM\Column(type: Types::DATETIME_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $removedAt = null;
+
     public function getId(): int { return $this->id; }
 
     public function getProduct(): Product { return $this->product; }
@@ -56,6 +66,20 @@ class ProductHistory
     public function setExpirationDate(?\DateTimeInterface $expirationDate): static
     {
         $this->expirationDate = $expirationDate;
+        return $this;
+    }
+
+    public function getAddedBy(): ?string { return $this->addedBy; }
+    public function setAddedBy(?string $addedBy): static { $this->addedBy = $addedBy; return $this; }
+
+    public function getRemovedBy(): ?string { return $this->removedBy; }
+
+    public function remove(?string $memberId): static
+    {
+        $this->active = 0;
+        $this->removedBy = $memberId;
+        $this->removedAt = new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+
         return $this;
     }
 }

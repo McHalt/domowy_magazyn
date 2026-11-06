@@ -5,6 +5,9 @@ namespace App\Controller;
 use App\Entity\Product;
 use App\Entity\ProductToFeature;
 use App\Entity\Unit;
+use App\Hub\Security\CurrentPrincipal;
+use App\Hub\Security\RequireScope;
+use App\Hub\Security\Scopes;
 use App\Repository\FeatureRepository;
 use App\Repository\ProductHistoryRepository;
 use App\Repository\ProductRepository;
@@ -20,6 +23,7 @@ use Symfony\Component\Routing\Attribute\Route;
 class ProductController extends AbstractController
 {
     #[Route('/products', name: 'products_list')]
+    #[RequireScope(Scopes::READ)]
     public function list(ProductRepository $productRepo): Response
     {
         $products = $productRepo->findAllWithRelations();
@@ -33,6 +37,7 @@ class ProductController extends AbstractController
     }
 
     #[Route('/products/{id}', name: 'product_view', requirements: ['id' => '\d+'])]
+    #[RequireScope(Scopes::READ)]
     public function view(int $id, ProductRepository $productRepo, MinStockManager $minStock): Response
     {
         $product = $productRepo->findByIdWithRelations($id);
@@ -49,6 +54,7 @@ class ProductController extends AbstractController
     }
 
     #[Route('/products/{id}/min-stock', name: 'product_min_stock', requirements: ['id' => '\d+'], methods: ['POST'])]
+    #[RequireScope(Scopes::ADMIN)]
     public function updateMinStock(
         int $id,
         Request $request,
@@ -79,6 +85,7 @@ class ProductController extends AbstractController
     }
 
     #[Route('/products/edit', name: 'product_edit', methods: ['GET', 'POST'])]
+    #[RequireScope(Scopes::WRITE)]
     public function edit(
         Request $request,
         ProductRepository $productRepo,
@@ -87,7 +94,8 @@ class ProductController extends AbstractController
         ProductHistoryRepository $historyRepo,
         EntityManagerInterface $em,
         UnitConsistencyChecker $unitChecker,
-        MinStockManager $minStock
+        MinStockManager $minStock,
+        CurrentPrincipal $principal
     ): Response {
         $id = $request->query->get('id');
         $ean = $request->query->get('ean') ?? $request->request->get('ean');
@@ -197,7 +205,7 @@ class ProductController extends AbstractController
         // Zapisz historię (dodaj sztuki)
         if ($qty > 0) {
             for ($i = 0; $i < (int)$qty; $i++) {
-                $historyRepo->addEntry($product, $costGrosze, $expirationDate ?: null, false);
+                $historyRepo->addEntry($product, $costGrosze, $expirationDate ?: null, false, $principal->memberId());
             }
         }
 
@@ -244,10 +252,12 @@ class ProductController extends AbstractController
     }
 
     #[Route('/products/remove', name: 'product_remove', methods: ['GET', 'POST'])]
+    #[RequireScope(Scopes::WRITE)]
     public function remove(
         Request $request,
         ProductRepository $productRepo,
-        EntityManagerInterface $em
+        EntityManagerInterface $em,
+        CurrentPrincipal $principal
     ): Response {
         $ean = $request->query->get('ean');
 
@@ -291,7 +301,7 @@ class ProductController extends AbstractController
             }
         }
 
-        $product->deactivateByExpirationDate($date);
+        $product->deactivateByExpirationDate($date, removedBy: $principal->memberId());
         $em->flush();
 
         return $this->redirectToRoute('main');

@@ -1,0 +1,6 @@
+{% extends '_message_page.html.twig' %}
+{% block title %}Logowanie nie powiodło się – Domowy Magazyn{% endblock %}
+{% block icon %}⚠️{% endblock %}
+{% block heading %}Logowanie nie powiodło się{% endblock %}
+{% block message %}{{ message }}{% endblock %}
+{% block actions %}<a href="{{ path('login') }}" class="btn btn-primary">Zaloguj ponownie</a>{% endblock %}

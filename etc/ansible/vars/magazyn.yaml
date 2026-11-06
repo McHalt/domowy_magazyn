@@ -1,0 +1,75 @@
+---
+app_user: domowy_magazyn
+domain: domowymagazyn.kchroscinski.pl
+domain_aliases:
+  - www.domowymagazyn.kchroscinski.pl
+
+app_root: "/var/www/{{ app_user }}"
+deploy_to: "{{ app_root }}/domains/{{ domain }}"
+shared_dir: "{{ deploy_to }}/shared"
+secrets_dir: "{{ shared_dir }}/secrets"
+composer_phar: "{{ deploy_to }}/tools/composer.phar"
+
+# Klucz wdrożeń konta aplikacji (ten sam co dla mchalt, jak w hubie).
+app_user_ssh_public_key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJ/6etuqr7a3CFPtToPVC3OEXJFKxL+5YZKOsvcqeRHE
+
+# Instalacja sprzed przejścia na osobne konto: źródło .env.local i .htpasswd dla provision.yaml,
+# cel legacy-cleanup.yaml.
+legacy_user: mchalt
+legacy_deploy_to: "/var/www/{{ legacy_user }}/domains/{{ domain }}"
+legacy_shared_dir: "{{ legacy_deploy_to }}/shared"
+legacy_fpm_pool_file: "/etc/php/{{ php_version }}/fpm/pool.d/domowymagazyn.conf"
+legacy_sudoers_file: /etc/sudoers.d/domowymagazyn-deploy
+
+php_version: "8.3"
+php_bin: "/usr/bin/php{{ php_version }}"
+# /usr/bin/php zostaje przy wersji, której używają pozostałe strony.
+php_default_version: "8.1"
+ondrej_ppa_key_fingerprint: B8DC7E53946656EFBCE4C1DD71DAEAAB4AD4CAB6
+fpm_service: "php{{ php_version }}-fpm"
+fpm_pool_file: "/etc/php/{{ php_version }}/fpm/pool.d/{{ app_user }}.conf"
+fpm_socket: "/run/php/php{{ php_version }}-fpm-{{ app_user }}.sock"
+
+# Baza i jej użytkownik istnieją od starej aplikacji; provision.yaml tylko przejmuje dane logowania.
+db_name: domowy_magazyn
+db_user: domowymagazyn
+
+apache_vhost_file: "/etc/apache2/sites-available/{{ domain }}.conf"
+apache_version_conf: zz-server-tokens.conf
+letsencrypt_cert_dir: "/etc/letsencrypt/live/{{ domain }}"
+# Puste: certbot użyje konta ACME, które już jest na serwerze.
+letsencrypt_email: ""
+
+# true do czasu wdrożenia logowania przez hub; potem false i apache.yaml (README, „Przejście na logowanie przez hub”).
+basic_auth_enabled: true
+htpasswd_file: "{{ shared_dir }}/.htpasswd"
+
+# Konfiguracja jawna (shared/.env.prod.local). Sekrety hub_client_secret i hub_event_key w .secrets/extra.yml.
+app_public_url: "https://{{ domain }}"
+hub_issuer: https://home-hub.kchroscinski.pl
+# Pusty: serwer–serwer idzie na hub_issuer.
+hub_internal_url: ""
+hub_client_id: module-magazyn
+hub_client_secret: ""
+hub_event_key: ""
+
+# false do czasu wdrożenia poleceń z integracji z hubem; inaczej timery co minutę kończą się błędem.
+timers_enabled: false
+timer_prefix: domowymagazyn
+timer_jobs:
+  - name: outbox
+    description: wysyłka zdarzeń do huba
+    command: app:hub:send-events
+    calendar: "*-*-* *:*:00"
+    timeout: 55
+    persistent: false
+  - name: scan
+    description: skan ważności i stanów minimalnych
+    command: app:hub:scan
+    calendar: "*-*-* 07:00:00 Europe/Warsaw"
+    timeout: 300
+    persistent: true
+
+releases_keep: 3
+# Zrzuty bazy sprzed migracji w backups/.
+db_dumps_keep: 5

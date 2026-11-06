@@ -1,81 +1,107 @@
 ---
-# Wdrożenie kodu:
-#   ansible-playbook deploy.yaml
-#
-# Bez hasła sudo — wszystko na koncie SSH; jedyny wyjątek to przeładowanie
-# PHP-FPM, dopuszczone w sudoers przez provision.yaml.
-#
-# Ansistrano w trybie rsync pcha working tree z laptopa (nie commit) do nowego
-# katalogu w releases/. `current` przeskakuje dopiero, gdy composer, połączenie
-# z bazą i migracje w nowym wydaniu przeszły — nieudany deploy nie psuje
-# działającej strony. Przed migracjami robiona jest kopia bazy (backups/).
-- name: Deploy domowego magazynu
+# Wdrożenie:
+#   ansible-playbook deploy.yaml [-e commit=<sha|gałąź|tag>]
+# Wdrażany jest zatwierdzony commit (domyślnie HEAD), nie kopia robocza. Połączenie jako konto aplikacji, bez hasła
+# sudo. `current` przeskakuje dopiero po composerze, sprawdzeniu bazy i migracjach; błąd wcześniej usuwa nowe wydanie
+# i nie dotyka działającego.
+- name: Wdrożenie domowego magazynu
   hosts: prod
-  gather_facts: true
+  gather_facts: false
   vars_files:
-    - vars/vars.yaml
-    - .secrets/extra.yml
-
+    - vars/magazyn.yaml
   vars:
-    ansistrano_deploy_from: "{{ repo_root }}/"
-    ansistrano_deploy_to: "{{ deploy_to }}"
-    ansistrano_deploy_via: rsync
-    ansistrano_allow_anonymous_stats: false
+    ansible_user: "{{ app_user }}"
+    commit: HEAD
+    magazyn_archive: "/tmp/domowy-magazyn-{{ magazyn_commit }}.tar.gz"
 
+    ansistrano_deploy_to: "{{ deploy_to }}"
+    ansistrano_deploy_via: copy_unarchive
+    ansistrano_deploy_from: "{{ magazyn_archive }}"
+    ansistrano_keep_releases: "{{ releases_keep }}"
+    ansistrano_allow_anonymous_stats: false
     ansistrano_shared_paths:
       - var/log
+      - var/share
     ansistrano_shared_files:
       - .env.local
-
-    ansistrano_rsync_extra_params:
-      - "--exclude=.git"
-      - "--exclude=.idea"
-      - "--exclude=/vendor"
-      - "--exclude=/var"
-      - "--exclude=/old"
-      - "--exclude=/docker"
-      - "--exclude=/docker-compose.yml"
-      - "--exclude=/etc"
-      - "--exclude=/public/bundles"
-      - "--exclude=/.env.local"
-      - "--exclude=/.env.*.local"
-      - "--exclude=/.env.local.php"
-      - "--exclude=*.bak"
-      - "--exclude=*.bak-*"
-      - "--exclude=*.orig"
-
-    ansistrano_after_setup_tasks_file: "{{ playbook_dir }}/deploy/after-setup.yaml"
-    ansistrano_after_update_code_tasks_file: "{{ playbook_dir }}/deploy/after-update-code.yaml"
-    ansistrano_after_symlink_shared_tasks_file: "{{ playbook_dir }}/deploy/after-symlink-shared.yaml"
-    ansistrano_after_symlink_tasks_file: "{{ playbook_dir }}/deploy/after-symlink.yaml"
+      - .env.prod.local
+    ansistrano_after_setup_tasks_file: "{{ playbook_dir }}/tasks/deploy/after-setup.yaml"
+    ansistrano_after_update_code_tasks_file: "{{ playbook_dir }}/tasks/deploy/after-update-code.yaml"
+    ansistrano_after_symlink_shared_tasks_file: "{{ playbook_dir }}/tasks/deploy/after-symlink-shared.yaml"
+    ansistrano_after_symlink_tasks_file: "{{ playbook_dir }}/tasks/deploy/after-symlink.yaml"
 
   pre_tasks:
-    - name: Sprawdź, czy composer.lock istnieje
+    - name: Przerwij w trybie --check
+      ansible.builtin.assert:
+        that: not ansible_check_mode
+        fail_msg: Wdrożenie nie ma trybu --check; nieudany przebieg i tak nie dotyka działającego wydania.
+        quiet: true
+
+    - name: Ustal wdrażany commit
+      ansible.builtin.command:
+        argv: [git, -C, "{{ playbook_dir }}/../..", rev-parse, --short=12, --verify, "{{ commit }}^{commit}"]
+      register: commit_sha
+      delegate_to: localhost
+      changed_when: false
+
+    - name: Nazwij wydanie
+      ansible.builtin.set_fact:
+        magazyn_commit: "{{ commit_sha.stdout }}"
+        ansistrano_release_version: "{{ lookup('pipe', 'date -u +%Y%m%d%H%M%S') }}-{{ commit_sha.stdout }}"
+
+    # Bez composer.lock każde wdrożenie instalowałoby inne wersje paczek niż sprawdzone lokalnie.
+    - name: Sprawdź composer.lock w commicie
+      ansible.builtin.command:
+        argv: [git, -C, "{{ playbook_dir }}/../..", cat-file, -e, "{{ magazyn_commit }}:composer.lock"]
+      delegate_to: localhost
+      changed_when: false
+
+    - name: Spakuj aplikację z commita
+      ansible.builtin.command:
+        argv: [git, -C, "{{ playbook_dir }}/../..", archive, --format=tar.gz, "--output={{ magazyn_archive }}", "{{ magazyn_commit }}"]
+      delegate_to: localhost
+      changed_when: false
+
+    - name: Sprawdź plik sekretów zewnętrznych
       ansible.builtin.stat:
-        path: "{{ repo_root }}/composer.lock"
-      register: local_composer_lock
+        path: "{{ playbook_dir }}/.secrets/extra.yml"
+      register: local_secrets
       delegate_to: localhost
 
-    - name: Przerwij bez composer.lock
-      ansible.builtin.fail:
-        msg: >-
-          Brak composer.lock — bez niego każdy deploy instalowałby inne wersje
-          paczek niż te sprawdzone lokalnie.
-      when: not local_composer_lock.stat.exists
+    - name: Wczytaj sekrety zewnętrzne
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/.secrets/extra.yml"
+      when: local_secrets.stat.exists
+      no_log: true
 
-    - name: Sprawdź sekrety
+    # Wartości trafiają do .env.prod.local w apostrofach.
+    - name: Sprawdź wartości konfiguracji
       ansible.builtin.assert:
         that:
-          - item.value | string | length > 0
-          - item.value | string != 'zmien-mnie'
           - "\"'\" not in item.value | string"
-        fail_msg: >-
-          {{ item.key }} w .secrets/extra.yml jest pusty, ma wartość z przykładu
-          albo zawiera apostrof (nie da się go zapisać w .env.local).
+          - "'\n' not in item.value | string"
+        fail_msg: "{{ item.key }}: wartość zawiera apostrof lub nową linię."
         quiet: true
-      loop: "{{ {'db_password': db_password, 'app_secret': app_secret, 'api_password': api_password, 'onesignal_app_id': onesignal_app_id, 'onesignal_rest_api_key': onesignal_rest_api_key} | dict2items }}"
+      loop: "{{ {'hub_issuer': hub_issuer, 'hub_internal_url': hub_internal_url, 'hub_client_id': hub_client_id,
+             'hub_client_secret': hub_client_secret, 'hub_event_key': hub_event_key} | dict2items }}"
       loop_control:
         label: "{{ item.key }}"
 
+    - name: Przypomnij o sekretach huba
+      ansible.builtin.debug:
+        msg: hub_client_secret lub hub_event_key jest pusty (.secrets/extra.yml); logowanie przez hub i zdarzenia nie zadziałają.
+      when: hub_client_secret | length == 0 or hub_event_key | length == 0
+
   roles:
     - ansistrano.deploy
+
+  post_tasks:
+    - name: Usuń archiwum
+      ansible.builtin.file:
+        path: "{{ magazyn_archive }}"
+        state: absent
+      delegate_to: localhost
+
+    - name: Pokaż wdrożone wydanie
+      ansible.builtin.debug:
+        msg: "Wdrożony commit {{ magazyn_commit }}, wydanie {{ ansistrano_release_version }}."

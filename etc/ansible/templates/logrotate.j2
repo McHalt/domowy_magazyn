@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+{{ shared_dir }}/var/log/*.log {
+    su {{ app_user }} {{ app_user }}
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    copytruncate
+}

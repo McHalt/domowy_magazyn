@@ -34,7 +34,7 @@ COPY . .
 
 # Generuj autoload i uruchom post-install-cmd
 RUN composer dump-autoload --optimize \
-    && mkdir -p var/cache var/log \
+    && mkdir -p var/cache var/log var/share \
     && chown -R www-data:www-data var/
 
 EXPOSE 9000

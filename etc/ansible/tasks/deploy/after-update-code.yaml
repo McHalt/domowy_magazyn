@@ -1,0 +1,14 @@
+---
+# var/ nie ma w archiwum, a ansistrano dowiązuje var/log i var/share bez tworzenia katalogu nadrzędnego.
+- name: Utwórz var/ w wydaniu
+  ansible.builtin.file:
+    path: "{{ ansistrano_release_path }}/var"
+    state: directory
+    mode: "0750"
+
+# W wydaniu, nie we wspólnym .env.prod.local: działające wydanie nie może przejąć wersji wdrożenia, które się nie powiodło.
+- name: Zapisz wersję wydania
+  ansible.builtin.copy:
+    content: "APP_VERSION={{ magazyn_commit }}\n"
+    dest: "{{ ansistrano_release_path }}/.env.prod"
+    mode: "0640"

@@ -15,6 +15,25 @@ class MinStockRuleRepository extends ServiceEntityRepository
         parent::__construct($registry, MinStockRule::class);
     }
 
+    /**
+     * Wszystkie reguły jednym zapytaniem.
+     *
+     * @return array{product: array<int, array<string, MinStockRule>>, group: array<int, array<string, MinStockRule>>}
+     */
+    public function findAllIndexed(): array
+    {
+        $indexed = ['product' => [], 'group' => []];
+        foreach ($this->findAll() as $rule) {
+            if ($rule->getProduct() !== null) {
+                $indexed['product'][$rule->getProduct()->getId()][$rule->getMinStockBasis()->value] = $rule;
+            } elseif ($rule->getGroup() !== null) {
+                $indexed['group'][$rule->getGroup()->getId()][$rule->getMinStockBasis()->value] = $rule;
+            }
+        }
+
+        return $indexed;
+    }
+
     /** @return array<string, MinStockRule> klucz: MinStockBasis->value */
     public function findForTarget(Product|ProductsGroup $target): array
     {

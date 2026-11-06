@@ -14,12 +14,18 @@ class ProductHistoryRepository extends ServiceEntityRepository
         parent::__construct($registry, ProductHistory::class);
     }
 
-    public function addEntry(Product $product, int $costGrosze, ?string $expirationDate, bool $flush = true): ProductHistory
-    {
+    public function addEntry(
+        Product $product,
+        int $costGrosze,
+        ?string $expirationDate,
+        bool $flush = true,
+        ?string $addedBy = null,
+    ): ProductHistory {
         $history = new ProductHistory();
         $history->setProduct($product);
         $history->setCost($costGrosze);
         $history->setActive(1);
+        $history->setAddedBy($addedBy);
         $history->setDateAdded(new \DateTime());
         if ($expirationDate) {
             $history->setExpirationDate(new \DateTime($expirationDate));

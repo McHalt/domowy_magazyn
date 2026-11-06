@@ -1,0 +1,26 @@
+---
+- name: Sprawdź odpowiedzi innych stron po zmianach
+  ansible.builtin.command:
+    argv: [curl, -sk, -o, /dev/null, -w, "%{http_code}", --max-time, "15",
+           --resolve, "{{ item.1 }}:{{ {'http': 80, 'https': 443}[item.0] }}:127.0.0.1",
+           "{{ item | join('://') }}/"]
+  loop: "{{ ['http', 'https'] | product(server_sites | reject('equalto', domain)) | list }}"
+  loop_control:
+    label: "{{ item | join('://') }} (przed: {{ site_codes_before[item | join('://')] }})"
+  register: sites_after
+  until: sites_after.stdout == site_codes_before[item | join('://')] or (item | join('://')) in site_codes_ignored
+  retries: "{{ site_check_retries | default(12) }}"
+  delay: 10
+  check_mode: false
+  changed_when: false
+  failed_when: false
+
+# until z failed_when: false nie przerywa po wyczerpaniu prób.
+- name: Porównaj odpowiedzi stron
+  vars:
+    site_codes_after: "{{ dict(sites_after.results | map(attribute='item') | map('join', '://') | zip(sites_after.results | map(attribute='stdout'))) }}"
+  ansible.builtin.assert:
+    that: >-
+      (site_codes_after | dict2items | rejectattr('key', 'in', site_codes_ignored) | items2dict)
+      == (site_codes_before | dict2items | rejectattr('key', 'in', site_codes_ignored) | items2dict)
+    fail_msg: "Strony odpowiadają inaczej niż przed zmianami. Przed: {{ site_codes_before }}, po: {{ site_codes_after }}"

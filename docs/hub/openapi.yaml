@@ -1,0 +1,1071 @@
+openapi: 3.1.0
+info:
+  title: Domowy magazyn — API dla huba
+  version: 1.0.0
+  summary: API wołane przez hub domowy w imieniu domownika.
+  description: |
+    Hub woła API nagłówkiem `Authorization: Bearer <JWT>`. Token wystawia hub na 60 s dla konkretnego domownika;
+    API weryfikuje go lokalnie (JWKS huba), szczegóły w `integration.md`, sekcja „Walidacja tokenu”.
+
+    Konwencje:
+
+    - JSON w UTF-8, nazwy pól `camelCase`.
+    - Daty kalendarzowe (`addedOn`, `expirationDate`) mają postać `YYYY-MM-DD` bez strefy czasu.
+    - Kwoty są liczbami całkowitymi w groszach (PLN), pola mają sufiks `Minor`; `0` oznacza „cena nieznana”.
+    - Listy: paginacja kursorem, odpowiedź `{"items": [...], "nextCursor": "..." | null}`. `limit` domyślnie 50,
+      maksymalnie 200. Kursor jest nieprzezroczysty. Niepoprawny `limit` albo `cursor` daje `422`; parametr zapytania podany jako tablica (`limit[]=1`) daje `400 bad_request`.
+    - Błędy: `application/problem+json` (RFC 9457) ze stałym polem `code` i `correlationId`.
+    - `X-Correlation-Id` z żądania wraca w odpowiedzi i trafia do logów; bez niego API generuje własny.
+    - API nie obsługuje `Idempotency-Key`. `POST` nie jest idempotentny (dodaje i zdejmuje sztuki), więc nie należy go
+      ponawiać automatycznie; ponawiać można tylko `GET` i `PUT`.
+    - Przekierowania (`3xx`) i strony HTML nie występują nigdzie pod `/api/v1`.
+    - Nieznana ścieżka: `404 not_found`; niedozwolona metoda: `405 method_not_allowed` z nagłówkiem `Allow`.
+  contact:
+    name: Właściciel Domowego magazynu
+servers:
+  - url: https://domowymagazyn.kchroscinski.pl/api/v1
+    description: produkcja
+  - url: http://localhost:8080/api/v1
+    description: środowisko lokalne (Docker)
+tags:
+  - name: products
+    description: Produkty i ich zapas (sztuki z datą ważności).
+  - name: groups
+    description: Grupy produktów (np. „kawa”, „makaron”) z łączną ilością.
+  - name: alerts
+    description: Kończąca się ważność i zapas poniżej minimum.
+  - name: stocks
+    description: Szybkie zapytanie „ile mamy X”.
+security:
+  - hubToken: []
+paths:
+  /products:
+    get:
+      operationId: listProducts
+      tags: [products]
+      summary: Lista produktów
+      description: |
+        Sortowanie: nazwa produktu (bez ogonków i bez rozróżniania wielkości liter), potem `id`.
+        Produkt bez nazwy sortuje się na początku.
+      x-required-scope: magazyn:items:read
+      security:
+        - hubToken: [magazyn:items:read]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: q
+          in: query
+          description: |
+            Fraza: ciągi liter i cyfr po normalizacji (małe litery, bez ogonków i znaków specjalnych) muszą występować
+            w polu „producent + nazwa”.
+          schema: {type: string, maxLength: 100}
+          example: makaron
+        - name: ean
+          in: query
+          description: Tylko produkt o tym dokładnym kodzie EAN (wyszukiwanie po zeskanowanym kodzie). Najwyżej jeden wynik.
+          schema: {type: string, pattern: '^[0-9]{1,14}$'}
+        - name: groupId
+          in: query
+          description: Tylko produkty z tej grupy.
+          schema: {type: integer, minimum: 1}
+        - name: inStock
+          in: query
+          description: '`true` — tylko produkty z co najmniej jedną sztuką na stanie; `false` — tylko bez stanu.'
+          schema: {type: boolean}
+      responses:
+        '200':
+          description: Strona produktów.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductPage'
+              example:
+                items:
+                  - id: 12
+                    ean: '5900617003441'
+                    name: Penne
+                    producer: Barilla
+                    unit: g
+                    amountPerPackage: 500
+                    quantity: 3
+                    totalAmount: 1500
+                    lastCostMinor: 649
+                    lowestCostMinor: 499
+                    groups: [{id: 4, name: Makaron}]
+                    minStock: {packages: 2, amount: null}
+                    belowMinimum: false
+                nextCursor: null
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      operationId: createProduct
+      tags: [products]
+      summary: Nowy produkt
+      description: |
+        Tworzy produkt (bez sztuk na stanie; sztuki dodaje `POST /products/{productId}/stock`). Kod EAN jest unikalny.
+      x-required-scope: magazyn:items:write
+      security:
+        - hubToken: [magazyn:items:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreate'
+            example:
+              ean: '5900617003441'
+              name: Penne
+              producer: Barilla
+              unit: g
+              amountPerPackage: 500
+              groupIds: [4]
+      responses:
+        '201':
+          description: Utworzony produkt.
+          headers:
+            Location:
+              description: Adres utworzonego produktu (ścieżka względna wobec hosta).
+              schema: {type: string}
+              example: /api/v1/products/12
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '409':
+          description: Produkt o tym kodzie EAN już istnieje (`code` = `ean_taken`, w `productId` jego `id`).
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+              example:
+                type: https://domowymagazyn.kchroscinski.pl/errors/ean_taken
+                title: Produkt o tym kodzie EAN już istnieje
+                status: 409
+                code: ean_taken
+                productId: 12
+                correlationId: 7f3c1a52-0d52-4c8e-9a54-3b1f2e6d9a10
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /products/{productId}:
+    parameters:
+      - $ref: '#/components/parameters/ProductId'
+    get:
+      operationId: getProduct
+      tags: [products]
+      summary: Produkt wraz ze sztukami na stanie
+      x-required-scope: magazyn:items:read
+      security:
+        - hubToken: [magazyn:items:read]
+      responses:
+        '200':
+          description: Produkt.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductDetail'}
+              example:
+                id: 12
+                ean: '5900617003441'
+                name: Penne
+                producer: Barilla
+                unit: g
+                amountPerPackage: 500
+                quantity: 2
+                totalAmount: 1000
+                lastCostMinor: 649
+                lowestCostMinor: 499
+                groups: [{id: 4, name: Makaron}]
+                minStock: {packages: 2, amount: null}
+                belowMinimum: false
+                items:
+                  - id: 301
+                    costMinor: 649
+                    addedOn: '2026-11-01'
+                    expirationDate: '2027-03-01'
+                    addedBy: {id: 0192f0a4-5c1e-7a2b-9d3c-4e5f6a7b8c9d, name: Anna}
+                  - id: 302
+                    costMinor: 0
+                    addedOn: '2026-10-12'
+                    expirationDate: null
+                    addedBy: null
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    patch:
+      operationId: updateProduct
+      tags: [products]
+      summary: Zmiana danych produktu
+      description: |
+        Aktualizacja częściowa: pola nieobecne w treści zostają bez zmian, `null` czyści pola opcjonalne
+        (`producer`, `unit`, `amountPerPackage`). `groupIds` zastępuje cały zbiór grup (pusta tablica odpina od wszystkich).
+        Treść musi zawierać co najmniej jedno pole.
+
+        Zmiana `unit` na niezgodną z poprzednią (inny wymiar, np. `g` → `ml`) usuwa zapisane minimum ilości produktu,
+        bo przestaje mieć sens. Zmiana `g` ↔ `kg` go nie rusza (minimum jest trzymane w jednostce bazowej).
+      x-required-scope: magazyn:items:write
+      security:
+        - hubToken: [magazyn:items:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/ProductUpdate'}
+            example:
+              producer: null
+              amountPerPackage: 400
+      responses:
+        '200':
+          description: Produkt po zmianie.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductDetail'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /products/{productId}/stock:
+    parameters:
+      - $ref: '#/components/parameters/ProductId'
+    post:
+      operationId: addStock
+      tags: [products]
+      summary: Dodanie sztuk na stan
+      description: |
+        Dodaje `quantity` sztuk (domyślnie 1) z tą samą ceną i datą ważności. Każda sztuka dostaje własne `id`.
+        Autorem wpisu jest domownik z tokenu (`sub`).
+      x-required-scope: magazyn:items:write
+      security:
+        - hubToken: [magazyn:items:write]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StockAdd'}
+            example:
+              quantity: 2
+              costMinor: 649
+              expirationDate: '2027-03-01'
+      responses:
+        '201':
+          description: Dodane sztuki i produkt po zmianie.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StockChange'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /products/{productId}/consume:
+    parameters:
+      - $ref: '#/components/parameters/ProductId'
+    post:
+      operationId: consumeStock
+      tags: [products]
+      summary: Zdjęcie sztuk ze stanu
+      description: |
+        Zdejmuje `quantity` sztuk (domyślnie 1). Bez `expirationDate` w treści zdejmowane są najpierw sztuki o najbliższej
+        dacie ważności (sztuki bez daty na końcu, potem najstarsze wpisy). Z `expirationDate` zdejmowane są tylko sztuki
+        z tą datą, a `null` oznacza „tylko sztuki bez daty”. Gdy na stanie jest mniej sztuk niż żądano, nic nie jest
+        zdejmowane i API odpowiada `409 insufficient_stock`. Sztuki nie są usuwane z bazy: wpis dostaje znacznik
+        zdjęcia (kto i kiedy).
+      x-required-scope: magazyn:items:write
+      security:
+        - hubToken: [magazyn:items:write]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/StockConsume'}
+            example:
+              quantity: 1
+      responses:
+        '200':
+          description: Zdjęte sztuki i produkt po zmianie.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StockChange'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '409':
+          description: Za mało sztuk na stanie (`code` = `insufficient_stock`, `available` — ile jest do zdjęcia).
+          content:
+            application/problem+json:
+              schema: {$ref: '#/components/schemas/Problem'}
+              example:
+                type: https://domowymagazyn.kchroscinski.pl/errors/insufficient_stock
+                title: Za mało sztuk na stanie
+                status: 409
+                code: insufficient_stock
+                available: 1
+                correlationId: 7f3c1a52-0d52-4c8e-9a54-3b1f2e6d9a10
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /products/{productId}/min-stock:
+    parameters:
+      - $ref: '#/components/parameters/ProductId'
+    put:
+      operationId: setProductMinStock
+      tags: [products]
+      summary: Stan minimalny produktu
+      description: |
+        Zastępuje oba progi: `packages` (liczba opakowań) i `amount` (ilość w jednostce produktu). `null` usuwa próg.
+        `amount` wymaga ustawionych w produkcie `unit` i `amountPerPackage`. Idempotentne.
+      x-required-scope: magazyn:items:admin
+      security:
+        - hubToken: [magazyn:items:admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MinStockInput'}
+            example: {packages: 2, amount: null}
+      responses:
+        '200':
+          description: Produkt po zmianie.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/ProductDetail'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /groups:
+    get:
+      operationId: listGroups
+      tags: [groups]
+      summary: Lista grup
+      description: 'Sortowanie: nazwa grupy (bez ogonków i bez rozróżniania wielkości liter), potem `id`.'
+      x-required-scope: magazyn:items:read
+      security:
+        - hubToken: [magazyn:items:read]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: Strona grup.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GroupPage'}
+              example:
+                items:
+                  - id: 4
+                    name: Makaron
+                    unit: g
+                    quantity: 7
+                    totalAmount: 3500
+                    productCount: 3
+                    minStock: {packages: null, amount: 1000}
+                    belowMinimum: false
+                nextCursor: null
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    post:
+      operationId: createGroup
+      tags: [groups]
+      summary: Nowa grupa
+      description: Zarządzanie grupami należy do dorosłych (`items:admin`).
+      x-required-scope: magazyn:items:admin
+      security:
+        - hubToken: [magazyn:items:admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GroupCreate'}
+            example: {name: Kawa, unit: g}
+      responses:
+        '201':
+          description: Utworzona grupa.
+          headers:
+            Location:
+              description: Adres utworzonej grupy (ścieżka względna wobec hosta).
+              schema: {type: string}
+              example: /api/v1/groups/5
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GroupDetail'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /groups/{groupId}:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    get:
+      operationId: getGroup
+      tags: [groups]
+      summary: Grupa wraz z produktami
+      x-required-scope: magazyn:items:read
+      security:
+        - hubToken: [magazyn:items:read]
+      responses:
+        '200':
+          description: Grupa.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GroupDetail'}
+              example:
+                id: 4
+                name: Makaron
+                unit: g
+                quantity: 7
+                totalAmount: 3500
+                productCount: 3
+                minStock: {packages: null, amount: 1000}
+                belowMinimum: false
+                products:
+                  - {id: 12, name: Penne, producer: Barilla, quantity: 3, countedInAmount: true}
+                  - {id: 15, name: Świderki, producer: Lubella, quantity: 4, countedInAmount: true}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '500': {$ref: '#/components/responses/InternalError'}
+    patch:
+      operationId: updateGroup
+      tags: [groups]
+      summary: Zmiana nazwy lub jednostki grupy
+      description: |
+        Pola nieobecne zostają bez zmian; `unit: null` usuwa jednostkę. Jednostka grupy musi być zgodna (ten sam wymiar:
+        `g`/`kg` albo `ml`/`l`) z jednostkami produktów, które ona zawiera; inaczej `422` z polem `unit`.
+        Zmiana na niezgodny wymiar albo usunięcie jednostki usuwa minimum ilości grupy.
+      x-required-scope: magazyn:items:admin
+      security:
+        - hubToken: [magazyn:items:admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/GroupUpdate'}
+            example: {unit: kg}
+      responses:
+        '200':
+          description: Grupa po zmianie.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GroupDetail'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /groups/{groupId}/min-stock:
+    parameters:
+      - $ref: '#/components/parameters/GroupId'
+    put:
+      operationId: setGroupMinStock
+      tags: [groups]
+      summary: Stan minimalny grupy
+      description: |
+        Jak `PUT /products/{productId}/min-stock`. `amount` wymaga ustawionej jednostki grupy i jest podawany w tej
+        jednostce.
+      x-required-scope: magazyn:items:admin
+      security:
+        - hubToken: [magazyn:items:admin]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/MinStockInput'}
+            example: {packages: null, amount: 1.5}
+      responses:
+        '200':
+          description: Grupa po zmianie.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/GroupDetail'}
+        '400': {$ref: '#/components/responses/BadRequest'}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '404': {$ref: '#/components/responses/NotFound'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /alerts:
+    get:
+      operationId: listAlerts
+      tags: [alerts]
+      summary: Bieżące alerty
+      description: |
+        Stan na teraz (strefa `Europe/Warsaw`), niezależny od zdarzeń wysyłanych do huba:
+
+        - `expiring` — sztuki na stanie, którym zostało najwyżej 7 dni ważności albo już ją utraciły, zgrupowane po
+          produkcie i dacie;
+        - `stock_low` — produkty i grupy poniżej zapisanego stanu minimalnego (osobny alert dla każdego progu).
+
+        Kolejność: najpierw `expiring` (od najwcześniejszej daty), potem `stock_low` (po nazwie).
+      x-required-scope: magazyn:items:read
+      security:
+        - hubToken: [magazyn:items:read]
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+        - name: type
+          in: query
+          description: Tylko alerty tego typu.
+          schema: {type: string, enum: [expiring, stock_low]}
+      responses:
+        '200':
+          description: Strona alertów.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/AlertPage'}
+              example:
+                items:
+                  - type: expiring
+                    productId: 12
+                    name: Penne
+                    producer: Barilla
+                    expirationDate: '2026-11-07'
+                    daysLeft: 1
+                    quantity: 2
+                  - type: stock_low
+                    subject: group
+                    subjectId: 4
+                    name: Makaron
+                    basis: amount
+                    current: 800
+                    minimum: 1000
+                    unit: g
+                nextCursor: null
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+  /stocks:
+    get:
+      operationId: lookupStock
+      tags: [stocks]
+      summary: Ile mamy produktu o danej nazwie
+      description: |
+        Dopasowanie po nazwie znormalizowanej (małe litery, bez ogonków i wszystkich znaków poza literami i cyframi):
+        „Mąka  Tortowa!” = „maka tortowa”. Dopasowanie jest dokładne, nie częściowe. Grupa o takiej nazwie ma
+        pierwszeństwo przed produktami; wtedy `type` = `group`. Bez dopasowania odpowiedź to `200` z `type` = `null`
+        i `quantity` = 0.
+
+        Odpowiedź nie jest stronicowana: `matches` zawiera tylko obiekty o identycznej znormalizowanej nazwie (w praktyce
+        kilka).
+      x-required-scope: magazyn:items:read
+      security:
+        - hubToken: [magazyn:items:read]
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema: {type: string, minLength: 1, maxLength: 200}
+          example: Mleko
+      responses:
+        '200':
+          description: Wynik wyszukiwania.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/StockLookup'}
+              example:
+                type: product
+                quantity: 3
+                matches:
+                  - {id: 21, name: Mleko, quantity: 3}
+        '401': {$ref: '#/components/responses/Unauthorized'}
+        '403': {$ref: '#/components/responses/Forbidden'}
+        '422': {$ref: '#/components/responses/ValidationFailed'}
+        '500': {$ref: '#/components/responses/InternalError'}
+components:
+  securitySchemes:
+    hubToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT wystawiony przez hub: `alg` = `RS256`, nagłówek `typ` = `at+jwt`, `iss` = adres huba,
+        `aud` = `urn:home-hub:module:magazyn`, `sub` = UUID domownika, `scope` rozdzielone spacją, `exp` = `iat` + 60 s.
+        W wymaganiach bezpieczeństwa operacji lista to scope wymagany do wywołania (to samo co `x-required-scope`).
+  parameters:
+    Limit:
+      name: limit
+      in: query
+      schema: {type: integer, minimum: 1, maximum: 200, default: 50}
+    Cursor:
+      name: cursor
+      in: query
+      description: '`nextCursor` z poprzedniej strony, przekazany bez zmian.'
+      schema: {type: string, maxLength: 512}
+    ProductId:
+      name: productId
+      in: path
+      required: true
+      schema: {type: integer, minimum: 1}
+    GroupId:
+      name: groupId
+      in: path
+      required: true
+      schema: {type: integer, minimum: 1}
+  headers:
+    CorrelationId:
+      description: Identyfikator korelacji (z żądania albo wygenerowany).
+      schema: {type: string}
+  responses:
+    BadRequest:
+      description: Treść nie jest poprawnym obiektem JSON albo `Content-Type` nie jest `application/json` (`code` = `bad_request`).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+          example:
+            type: https://domowymagazyn.kchroscinski.pl/errors/bad_request
+            title: Niepoprawne żądanie
+            status: 400
+            code: bad_request
+            correlationId: 7f3c1a52-0d52-4c8e-9a54-3b1f2e6d9a10
+    Unauthorized:
+      description: |
+        Brak tokenu albo token niepoprawny (podpis, `iss`, `aud`, `typ`, `alg`, `exp`, nieznany `kid`).
+        `code` = `invalid_token`; nagłówek `WWW-Authenticate: Bearer error="invalid_token"`. Przyczyna nie jest
+        ujawniana w odpowiedzi, tylko w logach.
+      headers:
+        WWW-Authenticate:
+          schema: {type: string}
+          example: Bearer error="invalid_token"
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+          example:
+            type: https://domowymagazyn.kchroscinski.pl/errors/invalid_token
+            title: Niepoprawny token
+            status: 401
+            code: invalid_token
+            correlationId: 7f3c1a52-0d52-4c8e-9a54-3b1f2e6d9a10
+    Forbidden:
+      description: Token nie ma scope-u wymaganego przez operację (`code` = `insufficient_scope`).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+          example:
+            type: https://domowymagazyn.kchroscinski.pl/errors/insufficient_scope
+            title: Brak uprawnień
+            status: 403
+            code: insufficient_scope
+            requiredScope: magazyn:items:write
+            correlationId: 7f3c1a52-0d52-4c8e-9a54-3b1f2e6d9a10
+    NotFound:
+      description: Nieznany zasób (`code` = `not_found`).
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+          example:
+            type: https://domowymagazyn.kchroscinski.pl/errors/not_found
+            title: Nie znaleziono
+            status: 404
+            code: not_found
+            correlationId: 7f3c1a52-0d52-4c8e-9a54-3b1f2e6d9a10
+    ValidationFailed:
+      description: |
+        Niepoprawne dane (`code` = `validation_failed`). `errors` zawiera listę pól z komunikatami po polsku, które
+        można pokazać użytkownikowi. Nazwa pola odpowiada polu treści albo parametrowi zapytania; błąd dotyczący całej
+        treści ma pole `body`.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+          example:
+            type: https://domowymagazyn.kchroscinski.pl/errors/validation_failed
+            title: Niepoprawne dane
+            status: 422
+            code: validation_failed
+            errors:
+              - {field: name, message: Nazwa jest wymagana}
+              - {field: ean, message: Kod EAN musi składać się z 1–14 cyfr}
+            correlationId: 7f3c1a52-0d52-4c8e-9a54-3b1f2e6d9a10
+    InternalError:
+      description: Błąd serwera (`code` = `internal_error`). Szczegóły tylko w logach, pod `correlationId`.
+      content:
+        application/problem+json:
+          schema: {$ref: '#/components/schemas/Problem'}
+          example:
+            type: https://domowymagazyn.kchroscinski.pl/errors/internal_error
+            title: Błąd serwera
+            status: 500
+            code: internal_error
+            correlationId: 7f3c1a52-0d52-4c8e-9a54-3b1f2e6d9a10
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status, code, correlationId]
+      properties:
+        type: {type: string, format: uri}
+        title: {type: string}
+        status: {type: integer}
+        code:
+          type: string
+          description: Stały kod błędu (maszynowy).
+          enum:
+            - invalid_token
+            - insufficient_scope
+            - not_found
+            - method_not_allowed
+            - bad_request
+            - validation_failed
+            - ean_taken
+            - insufficient_stock
+            - internal_error
+        detail: {type: string}
+        correlationId: {type: string}
+        errors:
+          type: array
+          description: Tylko przy `validation_failed`.
+          items:
+            type: object
+            required: [field, message]
+            properties:
+              field: {type: string}
+              message: {type: string}
+        requiredScope:
+          type: string
+          description: Tylko przy `insufficient_scope`.
+        productId:
+          type: integer
+          description: Tylko przy `ean_taken`.
+        available:
+          type: integer
+          description: Tylko przy `insufficient_stock`.
+    Unit:
+      type: string
+      enum: [szt, g, kg, ml, l]
+      description: |
+        Jednostka, w której podaje się „ilość w opakowaniu” i minima. Wymiary: sztuki (`szt`), masa (`g`, `kg`),
+        objętość (`ml`, `l`).
+    MemberRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: string, format: uuid, description: '`sub` domownika w hubie.'}
+        name: {type: string}
+    GroupRef:
+      type: object
+      required: [id, name]
+      properties:
+        id: {type: integer}
+        name: {type: string}
+    MinStock:
+      type: object
+      required: [packages, amount]
+      properties:
+        packages:
+          type: [integer, 'null']
+          minimum: 1
+          description: Minimalna liczba opakowań.
+        amount:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+          description: Minimalna ilość w jednostce produktu albo grupy (`unit`).
+    MinStockInput:
+      type: object
+      additionalProperties: false
+      required: [packages, amount]
+      properties:
+        packages:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 1000000000
+        amount:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+          description: |
+            W jednostce produktu albo grupy. Minimum jest zapisane jako liczba całkowita w jednostce bazowej (g, ml, szt),
+            więc w `g`, `ml` i `szt` ułamek jest zaokrąglany do całości (`1.5` g → `2` g), a w `kg` i `l` zachowuje
+            trzy miejsca (`1.5` kg = 1500 g).
+    StockItem:
+      type: object
+      required: [id, costMinor, addedOn, expirationDate, addedBy]
+      properties:
+        id: {type: integer}
+        costMinor: {type: integer, minimum: 0, description: Cena zakupu sztuki w groszach; 0 = nieznana.}
+        addedOn: {type: string, format: date}
+        expirationDate: {type: [string, 'null'], format: date}
+        addedBy:
+          description: Domownik, który dodał sztukę; `null` dla wpisów sprzed integracji z hubem i z klientów legacy.
+          oneOf:
+            - $ref: '#/components/schemas/MemberRef'
+            - type: 'null'
+    Product:
+      type: object
+      required:
+        - id
+        - ean
+        - name
+        - producer
+        - unit
+        - amountPerPackage
+        - quantity
+        - totalAmount
+        - lastCostMinor
+        - lowestCostMinor
+        - groups
+        - minStock
+        - belowMinimum
+      properties:
+        id: {type: integer}
+        ean:
+          type: string
+          pattern: '^[0-9]+$'
+          description: Kod EAN jest w bazie liczbą, więc zera wiodące są pomijane (`0012345678905` → `12345678905`).
+        name: {type: [string, 'null'], maxLength: 255}
+        producer: {type: [string, 'null'], maxLength: 255}
+        unit: {oneOf: [{$ref: '#/components/schemas/Unit'}, {type: 'null'}]}
+        amountPerPackage:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+          description: Ilość w jednym opakowaniu, w `unit`.
+        quantity: {type: integer, minimum: 0, description: Liczba opakowań (sztuk) na stanie.}
+        totalAmount:
+          type: [number, 'null']
+          description: '`quantity` × `amountPerPackage`, w `unit`; `null`, gdy brakuje jednostki albo ilości w opakowaniu.'
+        lastCostMinor:
+          type: [integer, 'null']
+          description: Cena ostatniego zakupu z ceną (w groszach); `null`, gdy żadna sztuka nie miała ceny.
+        lowestCostMinor:
+          type: [integer, 'null']
+          description: Najniższa cena zakupu w historii (w groszach); `null`, gdy żadna sztuka nie miała ceny.
+        groups:
+          type: array
+          items: {$ref: '#/components/schemas/GroupRef'}
+        minStock: {$ref: '#/components/schemas/MinStock'}
+        belowMinimum:
+          type: boolean
+          description: Stan jest poniżej któregokolwiek z ustawionych minimów.
+    ProductDetail:
+      allOf:
+        - $ref: '#/components/schemas/Product'
+        - type: object
+          required: [items]
+          properties:
+            items:
+              type: array
+              description: Sztuki na stanie, od najbliższej daty ważności (bez daty na końcu).
+              items: {$ref: '#/components/schemas/StockItem'}
+    ProductPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Product'}
+        nextCursor: {type: [string, 'null']}
+    ProductCreate:
+      type: object
+      additionalProperties: false
+      required: [ean, name]
+      properties:
+        ean:
+          type: string
+          pattern: '^[0-9]{1,14}$'
+        name: {type: string, minLength: 1, maxLength: 255}
+        producer: {type: [string, 'null'], maxLength: 255}
+        unit: {oneOf: [{$ref: '#/components/schemas/Unit'}, {type: 'null'}]}
+        amountPerPackage:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+          maximum: 1000000
+          description: Wymaga `unit`. Do 3 miejsc po przecinku.
+        groupIds:
+          type: array
+          maxItems: 50
+          uniqueItems: true
+          items: {type: integer, minimum: 1}
+    ProductUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 1, maxLength: 255}
+        producer: {type: [string, 'null'], maxLength: 255}
+        unit: {oneOf: [{$ref: '#/components/schemas/Unit'}, {type: 'null'}]}
+        amountPerPackage:
+          type: [number, 'null']
+          exclusiveMinimum: 0
+          maximum: 1000000
+        groupIds:
+          type: array
+          maxItems: 50
+          uniqueItems: true
+          items: {type: integer, minimum: 1}
+    StockAdd:
+      type: object
+      additionalProperties: false
+      properties:
+        quantity: {type: integer, minimum: 1, maximum: 100, default: 1}
+        costMinor: {type: integer, minimum: 0, maximum: 100000000, default: 0}
+        expirationDate: {type: [string, 'null'], format: date, description: Data z przeszłości jest dozwolona.}
+    StockConsume:
+      type: object
+      additionalProperties: false
+      properties:
+        quantity: {type: integer, minimum: 1, maximum: 100, default: 1}
+        expirationDate:
+          type: [string, 'null']
+          format: date
+          description: Nieobecne = dowolne (najpierw najbliższa data); data = tylko ta data; `null` = tylko sztuki bez daty.
+    StockChange:
+      type: object
+      required: [items, product]
+      properties:
+        items:
+          type: array
+          description: Sztuki dodane albo zdjęte w tym wywołaniu.
+          items: {$ref: '#/components/schemas/StockItem'}
+        product: {$ref: '#/components/schemas/ProductDetail'}
+      example:
+        items:
+          - id: 303
+            costMinor: 649
+            addedOn: '2026-11-06'
+            expirationDate: '2027-03-01'
+            addedBy: {id: 0192f0a4-5c1e-7a2b-9d3c-4e5f6a7b8c9d, name: Anna}
+        product:
+          id: 12
+          ean: '5900617003441'
+          name: Penne
+          producer: Barilla
+          unit: g
+          amountPerPackage: 500
+          quantity: 3
+          totalAmount: 1500
+          lastCostMinor: 649
+          lowestCostMinor: 499
+          groups: [{id: 4, name: Makaron}]
+          minStock: {packages: 2, amount: null}
+          belowMinimum: false
+          items: []
+    Group:
+      type: object
+      required: [id, name, unit, quantity, totalAmount, productCount, minStock, belowMinimum]
+      properties:
+        id: {type: integer}
+        name: {type: string, maxLength: 100}
+        unit:
+          description: Jednostka, w której liczona jest łączna ilość grupy.
+          oneOf: [{$ref: '#/components/schemas/Unit'}, {type: 'null'}]
+        quantity: {type: integer, minimum: 0, description: Łączna liczba opakowań wszystkich produktów grupy.}
+        totalAmount:
+          type: [number, 'null']
+          description: |
+            Łączna ilość w `unit` produktów, które da się przeliczyć (mają jednostkę zgodną z grupą i ilość w opakowaniu);
+            `null`, gdy grupa nie ma jednostki.
+        productCount: {type: integer, minimum: 0}
+        minStock: {$ref: '#/components/schemas/MinStock'}
+        belowMinimum: {type: boolean}
+    GroupDetail:
+      allOf:
+        - $ref: '#/components/schemas/Group'
+        - type: object
+          required: [products]
+          properties:
+            products:
+              type: array
+              items:
+                type: object
+                required: [id, name, producer, quantity, countedInAmount]
+                properties:
+                  id: {type: integer}
+                  name: {type: [string, 'null']}
+                  producer: {type: [string, 'null']}
+                  quantity: {type: integer, minimum: 0}
+                  countedInAmount:
+                    type: boolean
+                    description: Czy produkt wchodzi do `totalAmount` (ma jednostkę zgodną z grupą i ilość w opakowaniu).
+    GroupPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Group'}
+        nextCursor: {type: [string, 'null']}
+    GroupCreate:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        unit: {oneOf: [{$ref: '#/components/schemas/Unit'}, {type: 'null'}]}
+    GroupUpdate:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: {type: string, minLength: 1, maxLength: 100}
+        unit: {oneOf: [{$ref: '#/components/schemas/Unit'}, {type: 'null'}]}
+    ExpiringAlert:
+      type: object
+      required: [type, productId, name, producer, expirationDate, daysLeft, quantity]
+      properties:
+        type: {const: expiring}
+        productId: {type: integer}
+        name: {type: [string, 'null']}
+        producer: {type: [string, 'null']}
+        expirationDate: {type: string, format: date}
+        daysLeft:
+          type: integer
+          maximum: 7
+          description: Dni do daty ważności; `0` — dziś, wartości ujemne — po terminie.
+        quantity: {type: integer, minimum: 1, description: Liczba sztuk z tą datą.}
+    StockLowAlert:
+      type: object
+      required: [type, subject, subjectId, name, basis, current, minimum, unit]
+      properties:
+        type: {const: stock_low}
+        subject: {type: string, enum: [product, group]}
+        subjectId: {type: integer}
+        name: {type: [string, 'null']}
+        basis:
+          type: string
+          enum: [packages, amount]
+        current: {type: number}
+        minimum: {type: number}
+        unit:
+          description: '`null` dla `basis` = `packages`.'
+          oneOf: [{$ref: '#/components/schemas/Unit'}, {type: 'null'}]
+    Alert:
+      oneOf:
+        - $ref: '#/components/schemas/ExpiringAlert'
+        - $ref: '#/components/schemas/StockLowAlert'
+      discriminator:
+        propertyName: type
+        mapping:
+          expiring: '#/components/schemas/ExpiringAlert'
+          stock_low: '#/components/schemas/StockLowAlert'
+    AlertPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: {$ref: '#/components/schemas/Alert'}
+        nextCursor: {type: [string, 'null']}
+    StockLookup:
+      type: object
+      required: [type, quantity, matches]
+      properties:
+        type: {type: [string, 'null'], enum: [group, product, null]}
+        quantity: {type: integer, minimum: 0, description: Suma `quantity` ze wszystkich `matches`.}
+        matches:
+          type: array
+          items:
+            type: object
+            required: [id, name, quantity]
+            properties:
+              id: {type: integer}
+              name: {type: string}
+              quantity: {type: integer, minimum: 0}

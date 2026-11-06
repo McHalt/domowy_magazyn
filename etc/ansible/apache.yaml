@@ -1,79 +1,74 @@
 ---
-# Vhost Apache + certyfikat Let's Encrypt:
+# Virtual host, certyfikat Let's Encrypt i ukrycie wersji Apache na całym serwerze:
+#   ansible-playbook apache.yaml --ask-become-pass --check --diff
 #   ansible-playbook apache.yaml --ask-become-pass
+# Po provision.yaml i pierwszym deploy.yaml (vhost wskazuje na current/public) oraz przy każdej zmianie
+# templates/vhost.conf.j2 albo basic_auth_enabled.
 #
-# Uruchamiaj po pierwszym deployu (vhost wskazuje na current/public — bez
-# wydania strona by padła) i przy każdej zmianie templates/vhost.conf.j2.
-#
-# Przy pierwszym przebiegu certyfikatu jeszcze nie ma: vhost idzie tylko na :80,
-# certbot (certonly — nie dotyka konfiguracji Apache) weryfikuje domenę przez
-# ten vhost, potem vhost jest generowany ponownie z :443 i przekierowaniem.
+# Przy pierwszym przebiegu certyfikatu nie ma: virtual host idzie tylko na :80, certbot certonly (nie zmienia
+# konfiguracji Apache) weryfikuje domenę, potem virtual host powstaje ponownie z :443 i przekierowaniem.
 - name: Apache i HTTPS domowego magazynu
   hosts: prod
+  become: true
   gather_facts: true
   vars_files:
-    - vars/vars.yaml
-    - .secrets/extra.yml
+    - vars/server.yaml
+    - vars/magazyn.yaml
+  vars:
+    # Sprawdzenie certyfikatu z komputera uruchamiającego (w teście na kontenerze: false).
+    verify_tls_from_controller: true
 
   tasks:
-    - name: Sprawdź, czy jest wdrożone wydanie
+    - name: Sprawdź gniazdo puli FPM i wdrożone wydanie
       ansible.builtin.stat:
-        path: "{{ deploy_to }}/current/public/index.php"
-      register: current_release
+        path: "{{ item }}"
+      loop:
+        - "{{ fpm_socket }}"
+        - "{{ deploy_to }}/current/public/index.php"
+      register: prerequisites
+      check_mode: false
 
-    - name: Przerwij bez wdrożonego wydania
-      ansible.builtin.fail:
-        msg: Najpierw ansible-playbook deploy.yaml — vhost wskazuje na current/public.
-      when: not current_release.stat.exists
-
-    - name: Sprawdź dane Basic Auth
+    - name: Przerwij bez provision i deployu
       ansible.builtin.assert:
-        that:
-          - basic_auth_user | default('') | length > 0
-          - basic_auth_password | default('') | length > 0
-          - basic_auth_user != 'zmien-mnie'
-          - basic_auth_password != 'zmien-mnie'
-          - "':' not in basic_auth_user"
-        fail_msg: Uzupełnij basic_auth_user i basic_auth_password w .secrets/extra.yml (login bez dwukropka).
+        that: prerequisites.results | map(attribute='stat.exists') | min
+        fail_msg: "Brak gniazda {{ fpm_socket }} albo wydania w {{ deploy_to }}/current: najpierw provision.yaml i deploy.yaml."
         quiet: true
 
-    - name: Sprawdź, czy .htpasswd ma aktualne hasło
-      ansible.builtin.command:
-        argv: [htpasswd, -iv, "{{ htpasswd_file }}", "{{ basic_auth_user }}"]
-        stdin: "{{ basic_auth_password }}"
-      register: htpasswd_check
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: Zapisz .htpasswd
-      ansible.builtin.command:
-        argv: [htpasswd, -iBc, "{{ htpasswd_file }}", "{{ basic_auth_user }}"]
-        stdin: "{{ basic_auth_password }}"
-      when: htpasswd_check.rc != 0
-      no_log: true
-
-    - name: Udostępnij .htpasswd Apache'owi
-      become: true
-      ansible.builtin.file:
+    - name: Sprawdź plik .htpasswd
+      ansible.builtin.stat:
         path: "{{ htpasswd_file }}"
-        owner: "{{ ansible_user }}"
-        group: www-data
-        mode: "0640"
+      register: htpasswd_stat
+      check_mode: false
+      when: basic_auth_enabled | bool
+
+    - name: Przerwij bez .htpasswd
+      ansible.builtin.assert:
+        that: htpasswd_stat.stat.exists
+        fail_msg: "Brak {{ htpasswd_file }}: provision.yaml przejmuje go z {{ legacy_shared_dir }}."
+        quiet: true
+      when: basic_auth_enabled | bool
+
+    - name: Sprawdź konfigurację Apache przed zmianami
+      ansible.builtin.command:
+        cmd: apache2ctl configtest
+      check_mode: false
+      changed_when: false
+
+    - name: Odpowiedzi innych stron przed zmianami
+      ansible.builtin.include_tasks: tasks/site-codes-before.yaml
 
     - name: Sprawdź, czy certyfikat już istnieje
-      become: true
       ansible.builtin.stat:
         path: "{{ letsencrypt_cert_dir }}/fullchain.pem"
       register: cert_before
+      check_mode: false
 
-    - name: Vhost
-      ansible.builtin.include_tasks: apache/vhost.yaml
+    - name: Virtual host
+      ansible.builtin.include_tasks: tasks/vhost.yaml
       vars:
         https_enabled: "{{ cert_before.stat.exists }}"
 
     - name: Wystaw certyfikat
-      become: true
       ansible.builtin.command:
         cmd: >-
           certbot certonly --apache --non-interactive --agree-tos --keep-until-expiring
@@ -88,43 +83,68 @@
       delay: 30
       until: certbot_result.rc == 0 or 'Another instance of Certbot' not in certbot_result.stderr
 
-    - name: Vhost z HTTPS
-      ansible.builtin.include_tasks: apache/vhost.yaml
+    - name: Virtual host z HTTPS
+      ansible.builtin.include_tasks: tasks/vhost.yaml
       vars:
         https_enabled: true
-      when: not cert_before.stat.exists
+      when: not cert_before.stat.exists and not ansible_check_mode
 
-    - name: Sprawdź HTTPS z Basic Auth
-      ansible.builtin.uri:
-        url: "https://{{ domain }}{{ item }}"
-        url_username: "{{ basic_auth_user }}"
-        url_password: "{{ basic_auth_password }}"
-        force_basic_auth: true
-        status_code: 200
-      loop:
-        - /
-        - /products
-        - /groups
-      delegate_to: localhost
-      no_log: true
+    - name: Odpowiedzi innych stron po zmianach
+      ansible.builtin.include_tasks: tasks/site-codes-after.yaml
+      vars:
+        site_check_retries: 2
 
-    - name: Sprawdź, czy bez hasła strona jest zamknięta
-      ansible.builtin.uri:
-        url: "https://{{ domain }}/"
-        status_code: 401
-      delegate_to: localhost
+    - name: Sprawdź virtual host aplikacji
+      when: not ansible_check_mode
+      block:
+        - name: Sprawdź przekierowania i odpowiedzi
+          ansible.builtin.command:
+            argv: [curl, -sk, -o, /dev/null, -w, "%{http_code} %{redirect_url}", --max-time, "15",
+                   --resolve, "{{ item.host }}:{{ item.port }}:127.0.0.1", "{{ item.url }}"]
+          loop:
+            - {host: "{{ domain }}", port: 80, url: "http://{{ domain }}/sciezka?x=1",
+               expected: "301 https://{{ domain }}/sciezka?x=1"}
+            - {host: "{{ domain_aliases[0] }}", port: 80, url: "http://{{ domain_aliases[0] }}/sciezka?x=1",
+               expected: "301 https://{{ domain }}/sciezka?x=1"}
+            - {host: "{{ domain_aliases[0] }}", port: 443, url: "https://{{ domain_aliases[0] }}/sciezka?x=1",
+               expected: "301 https://{{ domain }}/sciezka?x=1"}
+            - {host: "{{ domain }}", port: 443, url: "https://{{ domain }}/",
+               expected: "{{ '401 ' if basic_auth_enabled | bool else '200 ' }}"}
+            - {host: "{{ domain }}", port: 443, url: "https://{{ domain }}/api/index.php?p=Main", expected: "200 "}
+            - {host: "{{ domain }}", port: 80, url: "http://{{ domain }}/api/index.php?p=Main", expected: "200 "}
+          loop_control:
+            label: "{{ item.url }}"
+          register: vhost_checks
+          changed_when: false
+          failed_when: vhost_checks.stdout | trim != item.expected | trim
 
-    - name: Sprawdź, czy API działa bez Basic Auth (po HTTP i HTTPS)
-      ansible.builtin.uri:
-        url: "{{ item }}://{{ domain }}/api/index.php?p=Main"
-        follow_redirects: none
-        status_code: 200
-      loop: [http, https]
-      delegate_to: localhost
+        # Który vhost :443 odbiera obce nazwy, zależy od kolejności w sites-enabled, więc tylko informacja.
+        - name: Sprawdź odpowiedź na obcą nazwę hosta
+          ansible.builtin.command:
+            argv: [curl, -sk, -o, /dev/null, -w, "%{http_code}", --max-time, "15",
+                   --resolve, "obcy.example.org:443:127.0.0.1", "https://obcy.example.org/"]
+          register: foreign_host
+          changed_when: false
+          failed_when: false
 
-    - name: Sprawdź przekierowanie HTTP na HTTPS
-      ansible.builtin.uri:
-        url: "http://{{ domain }}/"
-        follow_redirects: none
-        status_code: 301
-      delegate_to: localhost
+        - name: Pokaż odpowiedź na obcą nazwę hosta
+          ansible.builtin.debug:
+            msg: "https://obcy.example.org/ -> {{ foreign_host.stdout }} (oczekiwane 404, jeśli ten vhost jest domyślnym vhostem SSL)"
+
+        - name: Sprawdź /healthz
+          ansible.builtin.command:
+            argv: [curl, -sSk, --max-time, "10", --resolve, "{{ domain }}:443:127.0.0.1", "https://{{ domain }}/healthz"]
+          register: healthz
+          until: healthz.rc == 0 and healthz.stdout == '{"status":"ok"}'
+          retries: 5
+          delay: 2
+          changed_when: false
+
+        - name: Sprawdź certyfikat
+          ansible.builtin.uri:
+            url: "https://{{ domain }}/healthz"
+            status_code: 200
+            validate_certs: true
+          delegate_to: localhost
+          become: false
+          when: verify_tls_from_controller | bool

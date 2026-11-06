@@ -1,0 +1,11 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Domowy magazyn: {{ item.description }}
+
+[Timer]
+OnCalendar={{ item.calendar }}
+AccuracySec=5s
+Persistent={{ item.persistent | lower }}
+
+[Install]
+WantedBy=timers.target

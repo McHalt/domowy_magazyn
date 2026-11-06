@@ -1,0 +1,9 @@
+---
+# Strony na tym samym Apache; apache.yaml porównuje ich odpowiedzi przed zmianami i po nich.
+server_sites:
+  - kchroscinski.pl
+  - cookbook.kchroscinski.pl
+  - mc.kchroscinski.pl
+  - przeprowadzka.kchroscinski.pl
+  - szpaki.kchroscinski.pl
+  - slubkrzysiainatalki.pl

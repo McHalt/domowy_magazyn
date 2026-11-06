@@ -1,0 +1,7 @@
+---
+- name: Zapisz .env.prod.local
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/templates/env.prod.local.j2"
+    dest: "{{ shared_dir }}/.env.prod.local"
+    mode: "0600"
+  no_log: true

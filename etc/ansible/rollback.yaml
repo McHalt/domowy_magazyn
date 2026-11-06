@@ -1,18 +1,30 @@
 ---
-# Cofnięcie do poprzedniego wydania:
+# Powrót do poprzedniego wydania:
 #   ansible-playbook rollback.yaml
-#
-# Przestawia `current` na poprzedni katalog w releases/. Bazy nie dotyka.
-- name: Rollback domowego magazynu
+# Przestawia `current` na poprzednie wydanie i usuwa wycofane. Migracji nie cofa (są zgodne wstecz); w razie potrzeby
+# zrzut bazy z backups/.
+- name: Wycofanie domowego magazynu
   hosts: prod
   gather_facts: false
   vars_files:
-    - vars/vars.yaml
-    - .secrets/extra.yml
-
+    - vars/magazyn.yaml
   vars:
+    ansible_user: "{{ app_user }}"
     ansistrano_deploy_to: "{{ deploy_to }}"
-    ansistrano_after_symlink_tasks_file: "{{ playbook_dir }}/deploy/after-symlink.yaml"
+    ansistrano_allow_anonymous_stats: false
+    ansistrano_rollback_after_symlink_tasks_file: "{{ playbook_dir }}/tasks/deploy/after-symlink.yaml"
+
+  pre_tasks:
+    - name: Przerwij w trybie --check
+      ansible.builtin.assert:
+        that: not ansible_check_mode
+        fail_msg: Wycofanie nie ma trybu --check.
+        quiet: true
 
   roles:
     - ansistrano.rollback
+
+  post_tasks:
+    - name: Pokaż bieżące wydanie
+      ansible.builtin.debug:
+        msg: "Bieżące wydanie: {{ ansistrano_rollback_release_version }}."

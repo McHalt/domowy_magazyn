@@ -1,0 +1,54 @@
+---
+# Sprzątanie po instalacji z konta mchalt, po kilku dniach działania na koncie aplikacji:
+#   ansible-playbook legacy-cleanup.yaml --ask-become-pass --check --diff
+#   ansible-playbook legacy-cleanup.yaml --ask-become-pass
+# Wyłącza starą pulę FPM i starą regułę sudoers (pliki zostają z sufiksem .disabled-<data>), nie usuwa starego
+# katalogu wdrożenia (releases/, shared/, backups/, html/ ze starą aplikacją): jego los to decyzja właściciela.
+- name: Sprzątanie po instalacji mchalt
+  hosts: prod
+  become: true
+  gather_facts: true
+  vars_files:
+    - vars/magazyn.yaml
+
+  tasks:
+    - name: Sprawdź, czy vhost działa już na koncie aplikacji
+      ansible.builtin.command:
+        cmd: "grep -qF 'AssignUserId {{ app_user }} {{ app_user }}' {{ apache_vhost_file }}"
+      changed_when: false
+      check_mode: false
+
+    - name: Sprawdź gniazdo puli aplikacji
+      ansible.builtin.stat:
+        path: "{{ fpm_socket }}"
+      register: new_socket
+      check_mode: false
+      failed_when: not new_socket.stat.exists
+
+    - name: Wyłącz starą pulę FPM
+      ansible.builtin.command:
+        cmd: "mv {{ legacy_fpm_pool_file }} {{ legacy_fpm_pool_file }}.disabled-{{ ansible_facts['date_time']['date'] }}"
+        removes: "{{ legacy_fpm_pool_file }}"
+      notify: Przeładuj PHP-FPM
+
+    - name: Wyłącz starą regułę sudoers
+      ansible.builtin.command:
+        cmd: "mv {{ legacy_sudoers_file }} /root/{{ legacy_sudoers_file | basename }}.disabled-{{ ansible_facts['date_time']['date'] }}"
+        removes: "{{ legacy_sudoers_file }}"
+
+    - name: Wykonaj zaległe przeładowania
+      ansible.builtin.meta: flush_handlers
+
+    - name: Sprawdź, że aplikacja działa po wyłączeniu starej puli
+      ansible.builtin.command:
+        argv: [curl, -sSk, --max-time, "10", --resolve, "{{ domain }}:443:127.0.0.1", "https://{{ domain }}/healthz"]
+      register: healthz
+      changed_when: false
+      failed_when: healthz.stdout != '{"status":"ok"}'
+
+  handlers:
+    - name: Przeładuj PHP-FPM
+      ansible.builtin.systemd_service:
+        name: "{{ fpm_service }}"
+        state: reloaded
+      when: not ansible_check_mode
