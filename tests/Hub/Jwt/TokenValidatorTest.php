@@ -3,6 +3,7 @@
 namespace App\Tests\Hub\Jwt;
 
 use App\Hub\Jwt\InvalidTokenException;
+use App\Hub\Jwt\JwksProvider;
 use App\Hub\Jwt\TokenValidator;
 use App\Tests\Support\HubTestCase;
 use App\Tests\Support\JwtFactory;
@@ -219,5 +220,77 @@ final class TokenValidatorTest extends HubTestCase
 
         $this->assertRejected(fn() => $this->validator()->validateLoginAccessToken(JwtFactory::apiToken()), 'aud');
         $this->assertRejected(fn() => $this->validator()->validateLoginAccessToken(JwtFactory::idToken('n')), 'typ');
+    }
+
+    /** Postarza stan cache JWKS o podaną liczbę sekund (provider trzyma kopię w pamięci). */
+    private function ageJwksCache(int $seconds): void
+    {
+        $provider = static::getContainer()->get(JwksProvider::class);
+        $memo = new \ReflectionProperty($provider, 'memo');
+        $state = $memo->getValue($provider);
+        $state['fetchedAt'] -= $seconds;
+        $state['attemptedAt'] -= $seconds;
+        $memo->setValue($provider, $state);
+    }
+
+    private function queueJwksWithCacheControl(string $cacheControl): void
+    {
+        $this->hub->append(new \GuzzleHttp\Psr7\Response(200, ['Cache-Control' => $cacheControl], json_encode(JwtFactory::jwks())));
+    }
+
+    public function testJwksCacheFollowsMaxAgeOfHubResponse(): void
+    {
+        $this->queueJwksWithCacheControl('public, max-age=60');
+        $this->queueJwksWithCacheControl('public, max-age=60');
+
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+        $this->ageJwksCache(45);
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+        $this->assertCount(1, $this->hubCalls, '45 s < max-age=60: klucze z cache');
+
+        $this->ageJwksCache(20);
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+        $this->assertCount(2, $this->hubCalls, '65 s > max-age=60: ponowne pobranie');
+    }
+
+    public function testJwksCacheIsNeverLongerThanFiveMinutes(): void
+    {
+        $this->queueJwksWithCacheControl('public, max-age=3600');
+        $this->queueJwksWithCacheControl('public, max-age=3600');
+
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+        $this->ageJwksCache(299);
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+        $this->assertCount(1, $this->hubCalls);
+
+        $this->ageJwksCache(2);
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+        $this->assertCount(2, $this->hubCalls, 'po 5 min klucze są pobierane ponownie mimo max-age=3600');
+    }
+
+    public function testJwksCacheDefaultsToFiveMinutesWithoutCacheControl(): void
+    {
+        $this->queueJwks();
+        $this->queueJwks();
+
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+        $this->ageJwksCache(299);
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+        $this->assertCount(1, $this->hubCalls);
+
+        $this->ageJwksCache(2);
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+        $this->assertCount(2, $this->hubCalls);
+    }
+
+    public function testVeryShortMaxAgeDoesNotMakeEveryRequestHitTheHub(): void
+    {
+        $this->queueJwksWithCacheControl('public, max-age=0');
+
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+        $this->validator()->validateApiToken(JwtFactory::apiToken());
+
+        $this->assertCount(1, $this->hubCalls, 'najkrótsza świeżość to odstęp 30 s między próbami');
     }
 }

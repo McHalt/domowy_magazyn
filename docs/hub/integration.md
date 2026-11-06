@@ -29,7 +29,7 @@ Status: dokument opisuje stan docelowy; kod w tym repozytorium powstaje na jego 
 }
 ```
 
-- `auth.type: "hub_token"` to typ, którego dziś nie ma w `docs/04-module-contract.md` (tam: `api_key`, `bearer_static`, `basic`, `none`). Według odpowiedzi zespołu huba dodaje go etap 8 huba; do tego czasu jest to **propozycja**, patrz pytanie 1.
+- `auth.type: "hub_token"`: **typ potwierdzony przez zespół huba, nazwa ostateczna** (odpowiedź z 2026-11-06). Trafia do schematu manifestu w etapie 8.1 huba, bez zmiany `contractVersion`; do tego czasu `docs/04-module-contract.md` go jeszcze nie zna. Schemat odrzuci przy nim `forwardUser: true` i `auth.header`, bo token zawsze idzie w `Authorization: Bearer`. Pole `scope` tokenu zawiera tylko scope-y `magazyn:*` przyznane domownikowi.
 - `forwardUser: false`: tożsamość jest w podpisanym tokenie, magazyn nie czyta `X-Home-User-*`.
 - `minClientVersion` ustala projekt Android (wartość powyżej to miejsce na zajęcie).
 - Dlaczego trzy scope-y: odpowiadają trzem poziomom zaufania w domu. `child` czyta oraz dodaje i zdejmuje sztuki (także zakłada nowe produkty), ale nie ustawia stanów minimalnych ani nie zarządza grupami; to decyzja właściciela z 2026-11-06.
@@ -57,7 +57,7 @@ Wszystkie ścieżki są pod `/api/v1`. Adres bazowy dla huba: `https://domowymag
 
 ### Zdarzenia
 
-Magazyn zgłasza dwa typy, oba **zbiorcze** (jedno zdarzenie na typ na jeden skan, a skan jest raz dziennie o 07:00 `Europe/Warsaw`). Zdarzenia nie mają `actorUserId`, bo wynikają z upływu czasu, nie z działania domownika. „Ktoś dodał produkt” nie jest deklarowane celowo: przy zakupach byłby to szum.
+Magazyn zgłasza dwa typy, oba **zbiorcze** (jedno zdarzenie na typ na jeden skan, a skan jest raz dziennie o 07:00 `Europe/Warsaw`). W zdarzeniach pole `actorUserId` jest **pomijane** (nie `null`, bo `null` daje w hubie `422`), ponieważ zdarzenia wynikają z upływu czasu, nie z działania domownika. „Ktoś dodał produkt” nie jest deklarowane celowo: przy zakupach byłby to szum.
 
 | `type` | Kiedy | `payload` |
 |---|---|---|
@@ -85,7 +85,7 @@ Błędy: kroki 1–5 dają `401 invalid_token` z `WWW-Authenticate: Bearer error
 
 - Sprawdzenie `jti` i odwołania nie jest wykonywane (zgodnie z briefem): o odwołaniu decyduje 60 s życia tokenu.
 - Przy pierwszym wywołaniu z nowym `sub` magazyn zakłada lokalny rekord domownika (just-in-time), a przy kolejnych aktualizuje nazwę z claimu `name`. Polskie znaki w `name` są zachowywane (UTF-8).
-- JWKS: pobierany z `HUB_INTERNAL_URL` (jeśli ustawiony) albo `HUB_ISSUER`, ścieżka `/.well-known/jwks.json`; cache 10 min w `shared/var/share/cache` (wspólny dla web i API, przeżywa wdrożenia). Jeśli hub jest niedostępny, a klucz jest w cache, API działa dalej; jeśli klucza nie ma, API odpowiada `401` (nie `5xx`, bo nie da się zweryfikować tokenu), a błąd pobrania trafia do logu.
+- JWKS: pobierany z `HUB_INTERNAL_URL` (jeśli ustawiony) albo `HUB_ISSUER`, ścieżka `/.well-known/jwks.json`; cache w `shared/var/share/cache` (wspólny dla web i API, przeżywa wdrożenia) o świeżości z `max-age` odpowiedzi huba, **najwyżej 5 min** (hub wysyła `max-age=300`) i nie krócej niż 30 s. Limit 5 min wynika z rotacji awaryjnej: po wycieku klucza hub od razu usuwa stary z JWKS, więc magazyn nie może go trzymać dłużej. Jeśli hub jest niedostępny, a klucz jest w cache, API działa dalej; jeśli klucza nie ma, API odpowiada `401` (nie `5xx`, bo nie da się zweryfikować tokenu), a błąd pobrania trafia do logu.
 
 ## 3. Reguły domenowe (poza scope-ami)
 
@@ -121,7 +121,7 @@ Zmierzone w środowisku deweloperskim (Docker na Windowsie: PHP-FPM 8.3 + MySQL 
 | `POST /products/{id}/stock` | 17 ms | 21 ms | 4 KB |
 | `POST /products/{id}/consume` | 26 ms | 30 ms | 1 KB |
 
-Najwolniejszy przypadek w serii to ok. 0,5 s (`/alerts`); do tego dochodzi start PHP-FPM i połączenie z bazą (kilkadziesiąt ms). Pierwsze żądanie po wygaśnięciu cache JWKS (co 10 min) dolicza jedno wywołanie huba (limit 5 s, zwykle dziesiątki ms).
+Najwolniejszy przypadek w serii to ok. 0,5 s (`/alerts`); do tego dochodzi start PHP-FPM i połączenie z bazą (kilkadziesiąt ms). Pierwsze żądanie po wygaśnięciu cache JWKS (co 5 min) dolicza jedno wywołanie huba (limit 5 s, zwykle dziesiątki ms).
 
 ## 5. Logowanie przez hub i sesja
 
@@ -130,7 +130,7 @@ Zachowanie zgodne z briefem (sekcja 3); poniżej tylko doprecyzowania.
 | Element | Wartość |
 |---|---|
 | Klient | poufny, `client_id` = `module-magazyn` (`HUB_CLIENT_ID`), uwierzytelnienie `client_secret_basic` |
-| `redirect_uri` | `<APP_PUBLIC_URL>/callback`: produkcja `https://domowymagazyn.kchroscinski.pl/callback`, dev `http://localhost:8080/callback` |
+| `redirect_uri` | `<APP_PUBLIC_URL>/callback`. Klient produkcyjny ma jeden adres: `https://domowymagazyn.kchroscinski.pl/callback`. Adres `http://localhost:8080/callback` rejestrowany jest tylko w hubie dev, jako osobny klient `module-magazyn` z własnym sekretem (hub przyjmuje `http://` wyłącznie w dev) |
 | Przepływ | Authorization Code + PKCE `S256`, `scope=openid profile email`, `state`, `nonce` |
 | Trasy | `GET /login` (start), `GET /callback`, `POST /logout`, `GET /logged-out` (potwierdzenie wylogowania), `GET /login/denied` (strona „Brak dostępu”) |
 | Ciasteczko sesji | `magazyn_session`, `HttpOnly`, `Secure` (poza dev po HTTP), `SameSite=Lax` |
@@ -202,6 +202,17 @@ Zmiany na serwerze (opisane w `etc/ansible/`, wdraża właściciel; nic nie jest
 4. **`GET /healthz`** (`{"status":"ok"}`, `503` gdy baza niedostępna) bez uwierzytelnienia: sprawdza je wdrożenie.
 5. **Po stronie huba (do zrobienia przez zespół huba):** integracja `magazyn` w rejestrze (manifest powyżej), klient OIDC `module-magazyn` z `redirect_uri`, klucz zdarzeń, adres bazowy API, ewentualnie adres w `MODULES_ALLOWED_NETWORKS`, jeśli hub woła magazyn po sieci prywatnej.
 
+   Kolejność ustalona z zespołem huba (klienta OIDC i klucz zdarzeń da się utworzyć dopiero dla modułu zarejestrowanego w hubie, a rejestr powstaje przy wdrożeniu etapu 8.1). Sekrety generuje właściciel poleceniami huba i wkleja je bezpośrednio do sekretów wdrożenia magazynu (nie przez rozmowę ani repo):
+   1. wdrożenie etapu 8.1 huba (integracja `magazyn`, moduł `pending`);
+   2. klient OIDC `module-magazyn` i klucz zdarzeń;
+   3. sekrety w `shared/.env.prod.local` (`HUB_CLIENT_SECRET`, `HUB_EVENT_KEY`) przez wdrożenie magazynu;
+   4. włączenie modułu w hubie (`hub:modules:configure magazyn --base-url=… --enable`);
+   5. przełączenie domeny na nowe wydanie (`apache.yaml`);
+   6. wyłączenie Basic Auth (`basic_auth_enabled: false` i `apache.yaml`);
+   7. włączenie timerów zdarzeń (`timers_enabled: true`).
+
+   Do czasu kroków 1–4 domena zostaje przy poprzedniej instalacji; nowe wydanie jest już na serwerze, ale nieaktywne.
+
 ## 9. Znane ograniczenia
 
 - **Tabele produktów są MyISAM** (bez transakcji i kluczy obcych). Serializację zdjęć i dodań realizuje blokada nazwana na produkt (`GET_LOCK`) i dotyczy tylko API `/api/v1`; równoległy `RemoveProduct` z legacy API albo z webu może się z nim zderzyć (praktycznie nieosiągalne w domu).
@@ -220,11 +231,11 @@ Zmiany na serwerze (opisane w `etc/ansible/`, wdraża właściciel; nic nie jest
 
 ## 10. Pytania do zespołu huba
 
-Każde z propozycją; bez odpowiedzi przyjmuję propozycję.
+Każde z propozycją. **Zespół huba odpowiedział 2026-11-06** (`D:\claude-work\magazyn-hub-stan.md`, sekcja „Odpowiedzi huba”): pytania 1–9 są uzgodnione zgodnie z propozycjami, a wynikające z nich zmiany są naniesione w tym dokumencie (potwierdzenie `hub_token`, cache JWKS ≤ 5 min, adres `localhost` tylko w dev, kolejność przełączenia). Pytanie 2 realizuje polecenie `hub:dev:token <e-mail> --module=magazyn --scope=…` w hubie dev (etap 8.1); token ważny 60 s.
 
 1. **Typ uwierzytelnienia w manifeście.** Propozycja: `auth: {"type": "hub_token"}` i `forwardUser: false`, token z `aud` = `urn:home-hub:module:magazyn`, `typ` = `at+jwt`, ważny 60 s, ponownie używany przez hub w tym czasie. Czy ten typ trafi do schematu manifestu w etapie 8 i czy nazwa jest ostateczna?
 2. **Test end-to-end API przed adapterem.** Dev nie wystawi tokenu API bez adaptera. Propozycja: polecenie `bin/console` w hubie, które drukuje podpisany token `at+jwt` dla wskazanego domownika i scope-ów (dev), albo wskazanie istniejącego mechanizmu. Wtedy sprawdzę magazyn na prawdziwym JWKS dev.
-3. **Rotacja kluczy.** Zakładam, że w JWKS stary klucz zostaje co najmniej tak długo, jak życie tokenu (10 min) po rotacji. Potwierdzenie?
+3. **Rotacja kluczy.** Potwierdzone przez hub: przy planowej rotacji (co 90 dni, nie częściej niż co 15 min) poprzedni klucz zostaje w JWKS do następnej rotacji. Przy rotacji awaryjnej (wyciek) hub usuwa stary klucz od razu, dlatego magazyn trzyma JWKS najwyżej 5 min.
 4. **Wartości w polach.** Identyfikatory zasobów to liczby całkowite (`id`), kwoty to grosze w polach z sufiksem `Minor` (np. `costMinor`), a daty kalendarzowe to `YYYY-MM-DD` bez strefy. Czy adapter i aplikacja Android mogą na tym polegać (nie ma w kontrakcie ogólnej konwencji kwot)?
 5. **Skanowanie kodów.** Propozycja: `GET /products?ean=<kod>` zwraca najwyżej jeden element (lub pustą listę); do dodania produktu po zeskanowaniu aplikacja używa `POST /products/{id}/stock`, a nowy produkt zakłada `POST /products`.
 6. **Format `X-Correlation-Id`.** Przyjmuję dowolny ciąg do 64 znaków `[A-Za-z0-9._-]` (tak samo jak hub); inny jest ignorowany i zastępowany wygenerowanym UUID. Zgadza się z tym, co hub wysyła?
@@ -237,3 +248,4 @@ Każde z propozycją; bez odpowiedzi przyjmuję propozycję.
 1. Rotacja `API_PASSWORD`: zdecydowano, że **nie**. Logi Apache sprzed zmiany formatu (rotacja 14 dni) zawierają to hasło; po upływie retencji problem znika bez działań. Do ponownej decyzji tylko, jeśli logi były udostępniane.
 2. Termin wyłączenia Basic Auth po sprawdzeniu logowania przez hub (kroki w `etc/ansible/README.md`).
 3. Czas życia sesji web: propozycja 30 dni (koniec sesji i tak następuje przy `invalid_grant`).
+4. Odbiorcy `magazyn.stock_low`: przy `requiredScope: magazyn:items:read` powiadomienia dostają też dzieci. Jeśli mają je dostawać tylko dorośli, w manifeście `requiredScope` zdarzenia ustawiamy na `magazyn:items:admin`. Bez decyzji zostaje `read`.

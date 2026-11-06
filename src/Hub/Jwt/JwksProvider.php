@@ -13,11 +13,12 @@ use Symfony\Component\DependencyInjection\Attribute\Autowire;
 final class JwksProvider
 {
     private const CACHE_KEY = 'hub_jwks';
-    private const FRESH_FOR = 600;
+    /** Górny limit świeżości: po rotacji awaryjnej (wyciek klucza) hub od razu usuwa stary klucz z JWKS. */
+    private const MAX_FRESH_FOR = 300;
     private const KEEP_FOR = 86400;
     private const MIN_RETRY_INTERVAL = 30;
 
-    /** @var array{fetchedAt: int, attemptedAt: int, kidRefreshAt: int, jwks: array}|null kopia w pamięci na wypadek niezapisywalnego cache */
+    /** @var array{fetchedAt: int, attemptedAt: int, kidRefreshAt: int, freshFor: int, jwks: array}|null kopia w pamięci na wypadek niezapisywalnego cache */
     private ?array $memo = null;
 
     public function __construct(
@@ -32,7 +33,7 @@ final class JwksProvider
     public function keys(): array
     {
         $state = $this->load();
-        if ($state['fetchedAt'] > time() - self::FRESH_FOR || $state['attemptedAt'] > time() - self::MIN_RETRY_INTERVAL) {
+        if ($state['fetchedAt'] > time() - $state['freshFor'] || $state['attemptedAt'] > time() - self::MIN_RETRY_INTERVAL) {
             return $this->parse($state['jwks']);
         }
 
@@ -58,10 +59,12 @@ final class JwksProvider
     /** Przy błędzie pobrania zostają ostatnie znane klucze, a próba jest zapisana, żeby nie ponawiać jej przy każdym żądaniu. */
     private function fetchAndStore(array $state, bool $kidRefresh): array
     {
-        $jwks = $this->fetch();
+        $fetched = $this->fetch();
+        $jwks = $fetched['jwks'] ?? null;
         $now = time();
         $new = [
             'fetchedAt' => $jwks !== null ? $now : $state['fetchedAt'],
+            'freshFor' => $fetched !== null ? $fetched['freshFor'] : $state['freshFor'],
             'attemptedAt' => $now,
             'kidRefreshAt' => $kidRefresh ? $now : $state['kidRefreshAt'],
             'jwks' => $jwks ?? $state['jwks'],
@@ -75,7 +78,7 @@ final class JwksProvider
         return $new;
     }
 
-    /** @return array{fetchedAt: int, attemptedAt: int, kidRefreshAt: int, jwks: array} */
+    /** @return array{fetchedAt: int, attemptedAt: int, kidRefreshAt: int, freshFor: int, jwks: array} */
     private function load(): array
     {
         if ($this->memo !== null) {
@@ -85,17 +88,18 @@ final class JwksProvider
         $stored = $this->cache->getItem(self::CACHE_KEY)->get();
 
         return is_array($stored) && isset($stored['jwks'])
-            ? $stored + ['fetchedAt' => 0, 'attemptedAt' => 0, 'kidRefreshAt' => 0]
-            : ['fetchedAt' => 0, 'attemptedAt' => 0, 'kidRefreshAt' => 0, 'jwks' => ['keys' => []]];
+            ? $stored + ['fetchedAt' => 0, 'attemptedAt' => 0, 'kidRefreshAt' => 0, 'freshFor' => self::MAX_FRESH_FOR]
+            : ['fetchedAt' => 0, 'attemptedAt' => 0, 'kidRefreshAt' => 0, 'freshFor' => self::MAX_FRESH_FOR, 'jwks' => ['keys' => []]];
     }
 
+    /** @return array{jwks: array, freshFor: int}|null */
     private function fetch(): ?array
     {
         try {
             $response = $this->http->request('GET', $this->config->serverUrl('/.well-known/jwks.json'));
             $data = json_decode((string) $response->getBody(), true);
             if ($response->getStatusCode() === 200 && is_array($data) && is_array($data['keys'] ?? null)) {
-                return $data;
+                return ['jwks' => $data, 'freshFor' => self::freshFor($response->getHeaderLine('Cache-Control'))];
             }
             $this->logger->error('Pobranie JWKS nie powiodło się', ['status' => $response->getStatusCode()]);
         } catch (\Throwable $e) {
@@ -103,6 +107,14 @@ final class JwksProvider
         }
 
         return null;
+    }
+
+    /** `max-age` odpowiedzi huba, ale nie więcej niż 5 min i nie mniej niż odstęp między próbami (30 s). */
+    private static function freshFor(string $cacheControl): int
+    {
+        $maxAge = preg_match('/(?:^|[\s,])max-age=(\d+)/i', $cacheControl, $m) === 1 ? (int) $m[1] : self::MAX_FRESH_FOR;
+
+        return max(self::MIN_RETRY_INTERVAL, min($maxAge, self::MAX_FRESH_FOR));
     }
 
     /** @return array<string, Key> */

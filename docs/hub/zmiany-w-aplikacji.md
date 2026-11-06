@@ -57,7 +57,7 @@ Nowe migracje (addytywne, zgodne wstecz; przed migracją zrzut bazy w `backups/`
 Kolejność, szczegóły i polecenia w `etc/ansible/README.md`:
 
 1. `provision.yaml`: konto, katalogi, pula FPM, timery (wyłączone), sudoers, logrotate; przejmuje sekrety z konta `mchalt`.
-2. W hubie: zarejestrować integrację `magazyn`, klienta OIDC `module-magazyn` (`redirect_uri` = `https://domowymagazyn.kchroscinski.pl/callback`), wygenerować klucz zdarzeń; sekret i klucz wpisać do `etc/ansible/.secrets/extra.yml` (`hub_client_secret`, `hub_event_key`).
+2. W hubie (dopiero po wdrożeniu przez zespół huba jego etapu 8.1, bo wcześniej integracji `magazyn` w rejestrze nie ma): klient OIDC `module-magazyn` (`redirect_uri` = `https://domowymagazyn.kchroscinski.pl/callback`), wygenerować klucz zdarzeń; sekret i klucz wpisać do `etc/ansible/.secrets/extra.yml` (`hub_client_secret`, `hub_event_key`).
 3. `deploy.yaml` (po commicie): pierwsze wydanie, migracje, `healthz`.
 4. `apache.yaml`: przełączenie vhosta na nowe konto; **wymaga wdrożonego `/healthz`**.
 5. Sprawdzić logowanie przez hub; wtedy `basic_auth_enabled: false` + `apache.yaml`, oraz `timers_enabled: true` + `provision.yaml`.
