@@ -41,7 +41,7 @@ letsencrypt_cert_dir: "/etc/letsencrypt/live/{{ domain }}"
 letsencrypt_email: ""
 
 # true do czasu wdrożenia logowania przez hub; potem false i apache.yaml (README, „Przejście na logowanie przez hub”).
-basic_auth_enabled: true
+basic_auth_enabled: false
 htpasswd_file: "{{ shared_dir }}/.htpasswd"
 # Sprawdzenie, czy aplikacja żyje. /healthz jest obsługiwany przez front controller: Apache robi wewnętrzne przekierowanie
 # na /index.php, a to leży pod Basic Auth, więc dopóki jest włączony, sprawdzamy stare API (prawdziwy plik w /api/).
