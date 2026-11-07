@@ -43,6 +43,9 @@ letsencrypt_email: ""
 # true do czasu wdrożenia logowania przez hub; potem false i apache.yaml (README, „Przejście na logowanie przez hub”).
 basic_auth_enabled: true
 htpasswd_file: "{{ shared_dir }}/.htpasswd"
+# Sprawdzenie, czy aplikacja żyje. /healthz jest obsługiwany przez front controller: Apache robi wewnętrzne przekierowanie
+# na /index.php, a to leży pod Basic Auth, więc dopóki jest włączony, sprawdzamy stare API (prawdziwy plik w /api/).
+health_url: "https://{{ domain }}{{ '/api/index.php?p=Main' if basic_auth_enabled | bool else '/healthz' }}"
 
 # Konfiguracja jawna (shared/.env.prod.local). Sekrety hub_client_secret i hub_event_key w .secrets/extra.yml.
 app_public_url: "https://{{ domain }}"

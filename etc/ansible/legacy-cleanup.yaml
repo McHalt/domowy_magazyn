@@ -41,10 +41,10 @@
 
     - name: Sprawdź, że aplikacja działa po wyłączeniu starej puli
       ansible.builtin.command:
-        argv: [curl, -sSk, --max-time, "10", --resolve, "{{ domain }}:443:127.0.0.1", "https://{{ domain }}/healthz"]
+        argv: [curl, -sSk, -o, /dev/null, -w, "%{http_code}", --max-time, "10", --resolve, "{{ domain }}:443:127.0.0.1", "{{ health_url }}"]
       register: healthz
       changed_when: false
-      failed_when: healthz.stdout != '{"status":"ok"}'
+      failed_when: healthz.stdout != '200'
 
   handlers:
     - name: Przeładuj PHP-FPM

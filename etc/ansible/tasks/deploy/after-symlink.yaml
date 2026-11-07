@@ -14,11 +14,11 @@
   failed_when: vhost_points_to_current.rc not in [0, 1]
 
 # Certyfikat sprawdza apache.yaml; tu tylko, czy aplikacja żyje.
-- name: Sprawdź /healthz
+- name: Sprawdź, czy aplikacja odpowiada
   ansible.builtin.command:
-    argv: [curl, -sSk, --max-time, "10", --resolve, "{{ domain }}:443:127.0.0.1", "https://{{ domain }}/healthz"]
+    argv: [curl, -sSk, -o, /dev/null, -w, "%{http_code}", --max-time, "10", --resolve, "{{ domain }}:443:127.0.0.1", "{{ health_url }}"]
   register: healthz
-  until: healthz.rc == 0 and healthz.stdout == '{"status":"ok"}'
+  until: healthz.rc == 0 and healthz.stdout == '200'
   retries: 5
   delay: 2
   changed_when: false

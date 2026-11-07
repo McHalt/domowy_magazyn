@@ -4,7 +4,7 @@
 # (deploy to sprawdza). Sekrety wewnętrzne (APP_SECRET, hasło bazy, API_PASSWORD, OneSignal) są na serwerze
 # w shared/.env.local i nie przechodzą przez ten plik.
 
-# Wyświetlane raz przez hub: hub:modules:oidc-client magazyn --redirect-uri=<APP_PUBLIC_URL>/auth/callback
+# Wyświetlane raz przez hub: hub:modules:oidc-client magazyn --redirect-uri=<APP_PUBLIC_URL>/callback
 hub_client_secret: ""
 
 # Wyświetlany raz przez hub: hub:modules:event-key magazyn (43 znaki)

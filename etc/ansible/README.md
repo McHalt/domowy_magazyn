@@ -48,7 +48,7 @@ Wdrażany jest commit (domyślnie `HEAD`), nie kopia robocza: `git archive` pomi
 a `.gitattributes` (`export-ignore`) wyklucza `old/`, `docker/`, `etc/`. Na serwerze leci `composer install --no-dev`
 z `composer.lock` commita, sprawdzenie bazy i migracje; `current` przeskakuje dopiero po nich, a błąd wcześniej usuwa
 nowe wydanie i nie dotyka działającego. Trzymane są 3 ostatnie wydania. Po przełączeniu deploy przeładowuje FPM
-(`sudo -n`) i sprawdza `/healthz`.
+(`sudo -n`) i sprawdza, czy aplikacja odpowiada (`/healthz`, a dopóki działa Basic Auth, stare API: `/healthz` obsługuje front controller, więc Apache przekierowuje go wewnętrznie na `/index.php`, który jest pod Basic Auth).
 
 Cofnięcie do poprzedniego wydania: `rollback.yaml` (przeładowuje FPM, migracji nie cofa).
 
