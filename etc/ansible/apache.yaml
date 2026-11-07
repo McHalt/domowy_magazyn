@@ -109,7 +109,7 @@
             - {host: "{{ domain_aliases[0] }}", port: 443, url: "https://{{ domain_aliases[0] }}/sciezka?x=1",
                expected: "301 https://{{ domain }}/sciezka?x=1"}
             - {host: "{{ domain }}", port: 443, url: "https://{{ domain }}/",
-               expected: "{{ '401 ' if basic_auth_enabled | bool else '200 ' }}"}
+               expected: "{{ '401 ' if basic_auth_enabled | bool else '302 https://' ~ domain ~ '/login?return=/' }}"}
             - {host: "{{ domain }}", port: 443, url: "https://{{ domain }}/api/index.php?p=Main", expected: "200 "}
             - {host: "{{ domain }}", port: 80, url: "http://{{ domain }}/api/index.php?p=Main", expected: "200 "}
           loop_control:
