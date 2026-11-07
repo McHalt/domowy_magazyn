@@ -56,8 +56,8 @@ hub_client_id: module-magazyn
 hub_client_secret: ""
 hub_event_key: ""
 
-# false do czasu wdrożenia poleceń z integracji z hubem; inaczej timery co minutę kończą się błędem.
-timers_enabled: false
+# false wyłącza wysyłkę zdarzeń do huba (przy niedziałającym hubie timery co minutę kończą się błędem).
+timers_enabled: true
 timer_prefix: domowymagazyn
 timer_jobs:
   - name: outbox
